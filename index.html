@@ -3,237 +3,399 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Sistema POS Multirrol Web</title>
+  <title>Sistema POS Minimarket & Bodega Pro</title>
   <style>
-    body { font-family: Arial, sans-serif; margin: 0; background: #f8f9fa; color: #333; }
-    .login-container { max-width: 350px; margin: 100px auto; background: white; padding: 25px; border-radius: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
-    .app-container { display: none; padding: 15px; }
-    .header { display: flex; justify-content: space-between; align-items: center; background: #004085; color: white; padding: 12px 20px; border-radius: 6px; }
-    .nav-tabs { display: flex; gap: 5px; margin-top: 15px; flex-wrap: wrap; }
-    .nav-tabs button { padding: 10px 15px; background: #e9ecef; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; }
+    body { font-family: Arial, sans-serif; margin: 0; background: #f4f6f9; color: #333; }
+    .login-container { max-width: 360px; margin: 80px auto; background: white; padding: 25px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
+    .header { display: flex; justify-content: space-between; align-items: center; background: #0056b3; color: white; padding: 10px 20px; }
+    .nav-tabs { display: flex; gap: 4px; background: #e9ecef; padding: 8px; flex-wrap: wrap; }
+    .nav-tabs button { padding: 10px 14px; border: none; background: white; cursor: pointer; font-weight: bold; border-radius: 4px; }
     .nav-tabs button.active { background: #007bff; color: white; }
-    .panel-content { background: white; padding: 20px; margin-top: 15px; border-radius: 6px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); min-height: 400px; }
-    input, select { width: 100%; padding: 10px; margin: 8px 0; box-sizing: border-box; border: 1px solid #ccc; border-radius: 4px; }
-    button.btn-main { background: #28a745; color: white; border: none; padding: 10px 15px; border-radius: 4px; cursor: pointer; font-weight: bold; }
+    .panel { padding: 15px; background: white; margin: 10px; border-radius: 6px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+    .layout-grid { display: flex; gap: 15px; flex-wrap: wrap; }
+    .flex-1 { flex: 1; min-width: 300px; }
+    .flex-2 { flex: 2; min-width: 320px; }
+    input, select { width: 100%; padding: 8px; margin: 5px 0; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
+    .btn { padding: 9px 15px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; color: white; background: #28a745; margin-top: 5px; }
+    .btn-danger { background: #dc3545; }
+    .btn-info { background: #17a2b8; }
+    .btn-warning { background: #ffc107; color: black; }
+    .search-results { position: absolute; background: white; border: 1px solid #ccc; width: calc(100% - 20px); max-height: 200px; overflow-y: auto; z-index: 10; display: none; }
+    .search-item { padding: 8px; cursor: pointer; border-bottom: 1px solid #eee; }
+    .search-item:hover { background: #007bff; color: white; }
     table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-    th, td { border: 1px solid #dee2e6; padding: 10px; text-align: left; font-size: 14px; }
-    th { background: #f1f3f5; }
-    .badge-offline { background: #dc3545; color: white; padding: 3px 8px; border-radius: 4px; font-size: 12px; }
-    .badge-online { background: #28a745; color: white; padding: 3px 8px; border-radius: 4px; font-size: 12px; }
+    th, td { border: 1px solid #dee2e6; padding: 8px; text-align: left; font-size: 13px; }
+    .quick-buttons { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 8px; margin-top: 10px; }
+    .btn-quick { padding: 12px 5px; background: #e3f2fd; border: 1px solid #90caf9; border-radius: 4px; font-weight: bold; cursor: pointer; text-align: center; }
   </style>
 </head>
 <body>
 
-  <!-- MÓDULO DE LOGIN -->
+  <!-- LOGIN -->
   <div id="login-view" class="login-container">
-    <h2>Iniciar Sesión POS</h2>
-    <label>Usuario:</label>
-    <input type="text" id="login-user" placeholder="Ej. admin o cajero1">
-    <label>Contraseña:</label>
-    <input type="password" id="login-pass" placeholder="••••">
-    <button class="btn-main" style="width: 100%; margin-top: 15px;" onclick="realizarLogin()">Ingresar</button>
+    <h2 style="margin-top:0;">POS Login</h2>
+    <label>Usuario</label>
+    <input type="text" id="log-user" value="admin">
+    <label>Contraseña</label>
+    <input type="password" id="log-pass" value="1234">
+    <button class="btn" style="width:100%; margin-top:10px;" onclick="iniciarSesion()">Ingresar</button>
   </div>
 
   <!-- APLICACIÓN PRINCIPAL -->
-  <div id="app-view" class="app-container">
+  <div id="app-view" style="display:none;">
     <div class="header">
-      <h2 id="app-title">Sistema POS (Modo: Minimarket / Bodega)</h2>
+      <h3 style="margin:0;">Minimarket POS Pro</h3>
       <div>
-        <span id="net-status" class="badge-online">En línea</span>
-        <span id="user-info" style="margin-left: 15px; font-weight: bold;"></span>
-        <button onclick="cerrarSesion()" style="margin-left: 15px; background: #dc3545; color: white; border:none; padding: 5px 10px; border-radius:4px; cursor:pointer;">Salir</button>
+        <span id="user-display"></span>
+        <button class="btn btn-danger" style="margin-left:10px; padding:4px 8px;" onclick="location.reload()">Salir</button>
       </div>
     </div>
 
-    <div class="nav-tabs" id="menu-tabs">
-      <button class="active" onclick="cambiarTab('ventas')">F1 Ventas</button>
-      <button onclick="cambiarTab('clientes')" id="tab-clientes">F2 Clientes</button>
-      <button onclick="cambiarTab('productos')" id="tab-productos">F3 Productos</button>
-      <button onclick="cambiarTab('inventario')" id="tab-inventario">F4 Inventario</button>
-      <button onclick="cambiarTab('corte')" id="tab-corte">Corte de Caja</button>
-      <button onclick="cambiarTab('config')" id="tab-config">Configuración</button>
+    <div class="nav-tabs">
+      <button class="active" onclick="verTab('ventas', this)">F1 Ventas</button>
+      <button onclick="verTab('clientes', this)">F2 Clientes</button>
+      <button onclick="verTab('productos', this)" id="tab-prod">F3 Productos</button>
+      <button onclick="verTab('inventario', this)">F4 Inventario</button>
+      <button onclick="verTab('corte', this)" id="tab-corte">Corte Z</button>
     </div>
 
-    <!-- SECCIÓN: VENTAS -->
-    <div id="section-ventas" class="panel-content">
-      <h3>Terminal de Venta Rápida</h3>
-      <div style="display: flex; gap: 20px; flex-wrap: wrap;">
-        <div style="flex: 2; min-width: 300px;">
-          <input type="text" id="input-barcode" placeholder="Escanear código de barras o buscar..." onkeypress="manejarEscaneo(event)">
-          <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-top: 15px;">
-            <button class="btn-main" onclick="agregarItemDirecto('Pan Chuta', 0.50, 'P001')">🍞 Pan Chuta (S/ 0.50)</button>
-            <button class="btn-main" onclick="agregarItemDirecto('Inka Kola 500ml', 3.00, 'P002')">🥤 Inka Kola (S/ 3.00)</button>
-          </div>
+    <!-- PESTAÑA F1: VENTAS -->
+    <div id="sec-ventas" class="panel">
+      <div class="layout-grid">
+        <div class="flex-2" style="position:relative;">
+          <h4>Buscador de Productos (Escribe o Escanea)</h4>
+          <input type="text" id="txt-buscar" placeholder="Ingrese nombre o código de barras..." oninput="filtrarProductos(this.value)">
+          <div id="search-box" class="search-results"></div>
+
+          <h4>Productos Más Vendidos (Top Sellers)</h4>
+          <div id="top-products" class="quick-buttons"></div>
         </div>
-        <div style="flex: 1; min-width: 250px; background: #fdfdfe; border: 1px solid #ced4da; padding: 15px; border-radius: 4px;">
-          <h4>Carrito Actual</h4>
-          <table id="tabla-carrito">
-            <tr><th>Item</th><th>Cant</th><th>Total</th></tr>
+
+        <div class="flex-1" style="background:#f8f9fa; padding:12px; border-radius:6px; border:1px solid #ddd;">
+          <h4>Carrito de Compras</h4>
+          <table id="tbl-cart">
+            <thead><tr><th>Prod</th><th>Cant</th><th>Total</th><th>X</th></tr></thead>
+            <tbody></tbody>
           </table>
-          <h3 id="lbl-total">Total: S/ 0.00</h3>
-          <button class="btn-main" style="width: 100%; background: #17a2b8;" onclick="cobrarEfectivo(10)">Cobro Express (S/ 10)</button>
-          <button class="btn-main" style="width: 100%; margin-top: 5px; background: #6f42c1;" onclick="cobrarDigital()">Yape / Plin Exacto</button>
+          <h2 id="lbl-total" style="color:#0056b3;">Total: S/ 0.00</h2>
+          
+          <label>Método de Pago:</label>
+          <select id="pay-mode" onchange="toggleClienteCredito(this.value)">
+            <option value="Efectivo">Efectivo</option>
+            <option value="Yape/Plin">Yape / Plin</option>
+            <option value="Tarjeta">Tarjeta</option>
+            <option value="Crédito">Crédito / Fiado</option>
+          </select>
+
+          <div id="box-credito" style="display:none; margin-top:5px;">
+            <label>Seleccionar Cliente a Crédito:</label>
+            <select id="sel-cliente-credito"></select>
+          </div>
+
+          <button class="btn" style="width:100%; margin-top:10px; background:#007bff;" onclick="procesarPago()">Cobrar Venta</button>
         </div>
       </div>
     </div>
 
-    <!-- SECCIÓN: CLIENTES -->
-    <div id="section-clientes" class="panel-content" style="display:none;">
-      <h3>Módulo de Clientes y Créditos (Fiados)[cite: 2]</h3>
-      <p>Gestión de saldos deudores y límites de crédito por cliente.</p>
-      <table>
-        <tr><th>Cliente</th><th>DNI/RUC</th><th>Límite Crédito</th><th>Deuda Actual</th><th>Acción</th></tr>
-        <tr><td>Rosa Quispe</td><td>45127896</td><td>S/ 200.00</td><td>S/ 45.00</td><td><button onclick="alert('Enviando comprobante por WhatsApp...')">📲 Enviar WhatsApp</button></td></tr>
-      </table>
+    <!-- PESTAÑA F2: CLIENTES / CRÉDITOS -->
+    <div id="sec-clientes" class="panel" style="display:none;">
+      <div class="layout-grid">
+        <div class="flex-1" id="box-add-client">
+          <h4>Registrar Nuevo Cliente</h4>
+          <input type="text" id="cli-nom" placeholder="Nombre completo">
+          <input type="text" id="cli-dni" placeholder="DNI / RUC">
+          <input type="text" id="cli-tel" placeholder="Teléfono">
+          <input type="number" id="cli-lim" placeholder="Límite de Crédito S/">
+          <button class="btn" onclick="guardarCliente()">Guardar Cliente</button>
+        </div>
+        <div class="flex-2">
+          <h4>Clientes y Saldo Deudor</h4>
+          <table id="tbl-clientes">
+            <thead><tr><th>Cliente</th><th>Teléfono</th><th>Límite</th><th>Deuda</th><th>Acción</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
     </div>
 
-    <!-- SECCIÓN: PRODUCTOS -->
-    <div id="section-productos" class="panel-content" style="display:none;">
-      <h3>Catálogo de Productos y Semáforo de Vencimientos</h3>
-      <table>
-        <tr><th>ID</th><th>Descripción</th><th>Stock</th><th>Precio Venta</th><th>Vencimiento</th></tr>
-        <tr><td>P001</td><td>Pan Chuta (Unidad)</td><td>150</td><td>S/ 0.50</td><td style="color: green;">2026-12-30 (Normal)</td></tr>
-        <tr><td>P003</td><td>Queso Fresco Arequipeño</td><td>5.5 kg</td><td>S/ 24.00</td><td style="color: orange; font-weight: bold;">2026-11-15 (Próximo a vencer)[cite: 2]</td></tr>
-      </table>
+    <!-- PESTAÑA F3: PRODUCTOS -->
+    <div id="sec-productos" class="panel" style="display:none;">
+      <div class="layout-grid">
+        <div class="flex-1">
+          <h4>Nuevo Producto</h4>
+          <input type="text" id="p-id" placeholder="ID / Código">
+          <input type="text" id="p-barras" placeholder="Código de Barras (Alias)">
+          <input type="text" id="p-desc" placeholder="Descripción">
+          <input type="number" id="p-costo" placeholder="Costo Unidad S/">
+          <input type="number" id="p-precio" placeholder="Precio Venta S/">
+          <input type="number" id="p-stock" placeholder="Stock Inicial">
+          <input type="date" id="p-venc" placeholder="Fecha Vencimiento">
+          <button class="btn" onclick="guardarProducto()">Guardar Producto</button>
+        </div>
+        <div class="flex-2">
+          <h4>Catálogo Registrado</h4>
+          <table id="tbl-productos">
+            <thead><tr><th>ID</th><th>Descripción</th><th>Precio</th><th>Stock</th><th>Vencimiento</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
     </div>
 
-    <!-- SECCIÓN: INVENTARIO -->
-    <div id="section-inventario" class="panel-content" style="display:none;">
-      <h3>Control de Inventario y Mermas</h3>
-      <p>Registro de entradas, salidas y control de mermas/descuadres[cite: 2].</p>
-      <input type="text" placeholder="Buscar producto para ajustar stock...">
-      <button class="btn-main">Registrar Merma / Descarte</button>
+    <!-- PESTAÑA F4: INVENTARIO Y MERMAS -->
+    <div id="sec-inventario" class="panel" style="display:none;">
+      <h4>Control de Mermas y Bajas de Stock</h4>
+      <p>Seleccione el producto dañado, vencido o consumido para descontarlo del inventario[cite: 2].</p>
+      <div style="max-width:400px;">
+        <label>Buscar Producto:</label>
+        <select id="sel-merma-prod"></select>
+        <label>Cantidad a dar de baja (Merma):</label>
+        <input type="number" id="cant-merma" value="1">
+        <button class="btn btn-warning" onclick="registrarMerma()">Registrar Baja / Merma</button>
+      </div>
     </div>
 
-    <!-- SECCIÓN: CORTE DE CAJA -->
-    <div id="section-corte" class="panel-content" style="display:none;">
-      <h3>Corte de Caja (Corte Z - Ciego)[cite: 2]</h3>
-      <label>Ingrese efectivo contado en caja a ciegas (Blind Balancing)[cite: 2]:</label>
-      <input type="number" id="caja-declarada" placeholder="Ej. 450.00">
-      <button class="btn-main" onclick="realizarCorteZ()">Ejecutar Cierre Z</button>
-    </div>
-
-    <!-- SECCIÓN: CONFIGURACIÓN -->
-    <div id="section-config" class="panel-content" style="display:none;">
-      <h3>Configuración del Sistema y Credenciales SUNAT</h3>
-      <label>RUC del Negocio:</label>
-      <input type="text" value="20600123456">
-      <label>Usuario Secundario SOL (SUNAT)[cite: 2]:</label>
-      <input type="text" placeholder="MODDATOS">
-      <label>Clave SOL[cite: 2]:</label>
-      <input type="password" value="********">
+    <!-- PESTAÑA: CORTE Z DE CAJA -->
+    <div id="sec-corte" class="panel" style="display:none;">
+      <h4>Corte de Caja Z (Cierre de Turno / Día)</h4>
+      <p>Cuadre a ciegas (Blind Balancing): Ingrese el dinero en efectivo contado en su caja[cite: 2].</p>
+      <div style="max-width:350px;">
+        <label>Efectivo Físico en Caja S/:</label>
+        <input type="number" id="corte-efectivo" placeholder="Ej. 350.00">
+        <button class="btn btn-danger" style="width:100%;" onclick="ejecutarCorteZ()">Ejecutar Cierre Z</button>
+      </div>
     </div>
   </div>
 
   <script>
     const URL_SCRIPT = "https://script.google.com/macros/s/AKfycbxXpMgPYWmvduihcH37oU80-tdP9qik7QaDChQeG2xZt6lcsk9A8xI5dH4XREJE_Oq1Yw/exec";
-    let sesionActual = null;
+    
+    let productos = [];
+    let clientes = [];
+    let aliases = [];
     let carrito = [];
+    let usuarioActual = null;
 
-    async function realizarLogin() {
-      const u = document.getElementById("login-user").value;
-      const p = document.getElementById("login-pass").value;
-
+    async function cargarDatosBD() {
       try {
-        const res = await fetch(URL_SCRIPT, {
-          method: "POST",
-          mode: "no-cors",
-          headers: { "Content-Type": "text/plain;charset=utf-8" },
-          body: JSON.stringify({ accion: "login", payload: { usuario: u, password: p } })
-        });
-        
-        // Validación local con los datos de prueba predeterminados para evitar bloqueos por CORS en modo local
-        if ((u === "admin" && p === "1234") || (u === "cajero1" && p === "4321") || (u === "visor" && p === "0000")) {
-          sesionActual = { usuario: u, rol: u === "admin" ? "Administrador" : (u === "visor" ? "Espectador" : "Usuario") };
-          aplicarRolesYPermisos();
-        } else {
-          alert("Usuario o contraseña incorrectos.");
-        }
+        const res = await fetch(URL_SCRIPT + "?action=obtenerTodo");
+        const data = await res.json();
+        productos = data.productos || [];
+        clientes = data.clientes || [];
+        aliases = data.aliases || [];
+        renderTopSellers();
+        renderClientes();
+        renderProductos();
+        renderSelects();
       } catch (e) {
-        alert("Error de conexión con Google Sheets.");
+        console.error("Error al sincronizar con Google Sheets", e);
       }
     }
 
-    function aplicarRolesYPermisos() {
+    function iniciarSesion() {
+      const u = document.getElementById("log-user").value;
+      const p = document.getElementById("log-pass").value;
+      
+      let rol = "Usuario";
+      if (u === "admin" && p === "1234") rol = "Administrador";
+      else if (u === "visor" && p === "0000") rol = "Espectador";
+
+      usuarioActual = { usuario: u, rol: rol };
       document.getElementById("login-view").style.display = "none";
       document.getElementById("app-view").style.display = "block";
-      document.getElementById("user-info").innerText = `Usuario: ${sesionActual.usuario} (${sesionActual.rol})`;
+      document.getElementById("user-display").innerText = `${u} (${rol})`;
 
-      // Restricciones de Espectador y Cajero según requerimiento[cite: 2]
-      if (sesionActual.rol === "Espectador") {
-        document.getElementById("tab-productos").style.display = "none";
-        document.getElementById("tab-corte").style.display = "none";
-      } else if (sesionActual.rol === "Usuario") {
-        document.getElementById("tab-config").style.display = "none"; // Cajeros no ven configuración SUNAT ni márgenes
+      if (rol !== "Administrador") {
+        document.getElementById("tab-prod").style.display = "none";
+        document.getElementById("box-add-client").style.display = "none";
+      }
+
+      cargarDatosBD();
+    }
+
+    function verTab(sec, btn) {
+      ['ventas','clientes','productos','inventario','corte'].forEach(s => {
+        document.getElementById('sec-' + s).style.display = (s === sec) ? 'block' : 'none';
+      });
+      document.querySelectorAll('.nav-tabs button').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+    }
+
+    function renderTopSellers() {
+      const topContainer = document.getElementById("top-products");
+      topContainer.innerHTML = "";
+      const ordenados = [...productos].sort((a,b) => (b.contador || 0) - (a.contador || 0)).slice(0, 6);
+      ordenados.forEach(p => {
+        topContainer.innerHTML += `<div class="btn-quick" onclick="agregarAlCarrito('${p.id}')">${p.descripcion}<br><b>S/ ${parseFloat(p.precioVenta).toFixed(2)}</b></div>`;
+      });
+    }
+
+    function filtrarProductos(txt) {
+      const box = document.getElementById("search-box");
+      if (!txt.trim()) { box.style.display = "none"; return; }
+      
+      let matchAlias = aliases.find(a => String(a.codigo) === txt.trim());
+      let targetId = matchAlias ? matchAlias.id : txt.trim();
+
+      const res = productos.filter(p => p.descripcion.toLowerCase().includes(txt.toLowerCase()) || String(p.id) === targetId);
+      
+      box.innerHTML = "";
+      if (res.length > 0) {
+        box.style.display = "block";
+        res.forEach(p => {
+          box.innerHTML += `<div class="search-item" onclick="agregarAlCarrito('${p.id}'); document.getElementById('search-box').style.display='none';">${p.descripcion} - S/ ${parseFloat(p.precioVenta).toFixed(2)} (Stock: ${p.stockActual})</div>`;
+        });
+      } else {
+        box.style.display = "none";
       }
     }
 
-    function cerrarSesion() {
-      sesionActual = null;
-      document.getElementById("app-view").style.display = "none";
-      document.getElementById("login-view").style.display = "block";
-    }
-
-    function cambiarTab(tabName) {
-      const tabs = ['ventas', 'clientes', 'productos', 'inventario', 'corte', 'config'];
-      tabs.forEach(t => {
-        document.getElementById(`section-${t}`).style.display = (t === tabName) ? 'block' : 'none';
-      });
-      document.querySelectorAll('.nav-tabs button').forEach(b => b.classList.remove('active'));
-      event.target.classList.add('active');
-    }
-
-    function agregarItemDirecto(nombre, precio, id) {
-      carrito.push({ id: id, descripcion: nombre, cantidad: 1, precioUnitario: precio, total: precio });
+    function agregarAlCarrito(id) {
+      const prod = productos.find(p => String(p.id) === String(id));
+      if (!prod) return;
+      
+      const item = carrito.find(i => String(i.id) === String(id));
+      if (item) {
+        item.cantidad += 1;
+        item.total = item.cantidad * item.precioUnitario;
+      } else {
+        carrito.push({ id: prod.id, descripcion: prod.descripcion, cantidad: 1, precioUnitario: parseFloat(prod.precioVenta), total: parseFloat(prod.precioVenta) });
+      }
       renderCarrito();
     }
 
     function renderCarrito() {
-      const tabla = document.getElementById("tabla-carrito");
-      tabla.innerHTML = `<tr><th>Item</th><th>Cant</th><th>Total</th></tr>`;
+      const tbody = document.querySelector("#tbl-cart tbody");
+      tbody.innerHTML = "";
       let total = 0;
-      carrito.forEach(item => {
+      carrito.forEach((item, idx) => {
         total += item.total;
-        tabla.innerHTML += `<tr><td>${item.descripcion}</td><td>${item.cantidad}</td><td>S/ ${item.total.toFixed(2)}</td></tr>`;
+        tbody.innerHTML += `<tr><td>${item.descripcion}</td><td>${item.cantidad}</td><td>S/ ${item.total.toFixed(2)}</td><td><button onclick="carrito.splice(${idx},1); renderCarrito();">X</button></td></tr>`;
       });
-      document.getElementById("lbl-total").innerText = `Total: S/ ${total.toFixed(2)}`;
+      document.getElementById("lbl-total").innerText = "Total: S/ " + total.toFixed(2);
     }
 
-    async function cobrarEfectivo(montoRecibido) {
+    function toggleClienteCredito(val) {
+      document.getElementById("box-credito").style.display = (val === "Crédito") ? "block" : "none";
+    }
+
+    async function procesarPago() {
       if (carrito.length === 0) return alert("El carrito está vacío.");
-      const total = carrito.reduce((acc, curr) => acc + curr.total, 0);
-      const vuelto = montoRecibido - total;
-      alert(`Venta registrada. Vuelto: S/ ${vuelto.toFixed(2)}`);
+      const modo = document.getElementById("pay-mode").value;
+      const cliente = document.getElementById("sel-cliente-credito").value;
+
+      if (modo === "Crédito" && !cliente) return alert("Seleccione un cliente para otorgar crédito.");
+
+      const payload = { items: carrito, cajero: usuarioActual.usuario, metodoPago: modo, clienteNombre: cliente };
       
-      const payload = { items: carrito, cajero: sesionActual.usuario, metodoPago: 'Efectivo' };
-      await enviarVenta(payload);
+      alert("Venta registrada con éxito.");
+      carrito = [];
+      renderCarrito();
+
+      await fetch(URL_SCRIPT, {
+        method: "POST", mode: "no-cors",
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
+        body: JSON.stringify({ accion: "registrarVenta", payload: payload })
+      });
+
+      cargarDatosBD();
     }
 
-    async function cobrarDigital() {
-      if (carrito.length === 0) return alert("El carrito está vacío.");
-      alert("Pago digital Yape/Plin procesado correctamente.");
-      const payload = { items: carrito, cajero: sesionActual.usuario, metodoPago: 'Yape/Plin' };
-      await enviarVenta(payload);
+    function renderClientes() {
+      const tbody = document.querySelector("#tbl-clientes tbody");
+      tbody.innerHTML = "";
+      clientes.forEach(c => {
+        tbody.innerHTML += `<tr><td>${c.nombre}</td><td>${c.telefono}</td><td>S/ ${parseFloat(c.limiteCredito).toFixed(2)}</td><td>S/ ${parseFloat(c.deudaActual).toFixed(2)}</td><td><button class="btn btn-info" onclick="abonarDeuda('${c.nombre}')">Abonar</button></td></tr>`;
+      });
     }
 
-    async function enviarVenta(payload) {
-      try {
+    async function abonarDeuda(nombre) {
+      const monto = prompt(`Ingrese monto a abonar para el cliente ${nombre}:`);
+      if (monto && parseFloat(monto) > 0) {
         await fetch(URL_SCRIPT, {
-          method: "POST",
-          mode: "no-cors",
+          method: "POST", mode: "no-cors",
           headers: { "Content-Type": "text/plain;charset=utf-8" },
-          body: JSON.stringify({ accion: "registrarVenta", payload: payload })
+          body: JSON.stringify({ accion: "abonarCredito", payload: { nombre: nombre, monto: monto } })
         });
-        carrito = [];
-        renderCarrito();
-      } catch (e) {
-        console.error("Guardado offline temporalmente en caché.");
+        alert("Abono procesado correctamente.");
+        cargarDatosBD();
       }
     }
 
-    async function realizarCorteZ() {
-      const efectivoDeclarado = parseFloat(document.getElementById("caja-declarada").value) || 0;
-      alert(`Corte Z procesado. Efectivo declarado: S/ ${efectivoDeclarado.toFixed(2)}`);
+    function renderProductos() {
+      const tbody = document.querySelector("#tbl-productos tbody");
+      tbody.innerHTML = "";
+      productos.forEach(p => {
+        tbody.innerHTML += `<tr><td>${p.id}</td><td>${p.descripcion}</td><td>S/ ${parseFloat(p.precioVenta).toFixed(2)}</td><td>${p.stockActual}</td><td>${p.fechaVencimiento || '-'}</td></tr>`;
+      });
+    }
+
+    function renderSelects() {
+      const selCred = document.getElementById("sel-cliente-credito");
+      const selMer = document.getElementById("sel-merma-prod");
+      selCred.innerHTML = "<option value=''>-- Seleccionar --</option>";
+      selMer.innerHTML = "";
+
+      clientes.forEach(c => selCred.innerHTML += `<option value="${c.nombre}">${c.nombre} (Deuda: S/ ${c.deudaActual})</option>`);
+      productos.forEach(p => selMer.innerHTML += `<option value="${p.id}">${p.descripcion} (Stock: ${p.stockActual})</option>`);
+    }
+
+    async function guardarCliente() {
+      const payload = {
+        nombre: document.getElementById("cli-nom").value,
+        dniRuc: document.getElementById("cli-dni").value,
+        telefono: document.getElementById("cli-tel").value,
+        limiteCredito: document.getElementById("cli-lim").value
+      };
+      await fetch(URL_SCRIPT, {
+        method: "POST", mode: "no-cors",
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
+        body: JSON.stringify({ accion: "registrarCliente", payload: payload })
+      });
+      alert("Cliente Guardado.");
+      cargarDatosBD();
+    }
+
+    async function guardarProducto() {
+      const payload = {
+        id: document.getElementById("p-id").value,
+        codigoBarras: document.getElementById("p-barras").value,
+        descripcion: document.getElementById("p-desc").value,
+        costoUnidad: document.getElementById("p-costo").value,
+        precioVenta: document.getElementById("p-precio").value,
+        stockActual: document.getElementById("p-stock").value,
+        fechaVencimiento: document.getElementById("p-venc").value,
+        aGranel: "NO", unidadMedida: "unidad", unidadesEmpaque: 1, costoMayor: 0, stockMinimo: 5, categoria: "General"
+      };
+      await fetch(URL_SCRIPT, {
+        method: "POST", mode: "no-cors",
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
+        body: JSON.stringify({ accion: "registrarProducto", payload: payload })
+      });
+      alert("Producto Registrado.");
+      cargarDatosBD();
+    }
+
+    async function registrarMerma() {
+      const pId = document.getElementById("sel-merma-prod").value;
+      const cant = document.getElementById("cant-merma").value;
+      await fetch(URL_SCRIPT, {
+        method: "POST", mode: "no-cors",
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
+        body: JSON.stringify({ accion: "registrarMerma", payload: { id: pId, cantidad: cant } })
+      });
+      alert("Merma registrada.");
+      cargarDatosBD();
+    }
+
+    async function ejecutarCorteZ() {
+      const ef = parseFloat(document.getElementById("corte-efectivo").value) || 0;
+      await fetch(URL_SCRIPT, {
+        method: "POST", mode: "no-cors",
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
+        body: JSON.stringify({ accion: "ejecutarCorteZ", payload: { cajero: usuarioActual.usuario, efectivoDeclarado: ef } })
+      });
+      alert("Cierre Z completado exitosamente y hoja mensual respaldada.");
     }
   </script>
 </body>
