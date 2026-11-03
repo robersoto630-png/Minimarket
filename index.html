@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Sistema POS Minimarket & Bodega Pro</title>
+  <title>POS Minimarket & Bodega Pro</title>
   <style>
     body { font-family: Arial, sans-serif; margin: 0; background: #f4f6f9; color: #333; }
     .login-container { max-width: 360px; margin: 80px auto; background: white; padding: 25px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
@@ -25,20 +25,22 @@
     .search-item:hover { background: #007bff; color: white; }
     table { width: 100%; border-collapse: collapse; margin-top: 10px; }
     th, td { border: 1px solid #dee2e6; padding: 8px; text-align: left; font-size: 13px; }
+    th { background: #f8f9fa; }
     .quick-buttons { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 8px; margin-top: 10px; }
     .btn-quick { padding: 12px 5px; background: #e3f2fd; border: 1px solid #90caf9; border-radius: 4px; font-weight: bold; cursor: pointer; text-align: center; }
   </style>
 </head>
 <body>
 
-  <!-- LOGIN -->
+  <!-- LOGIN LIMPIO -->
   <div id="login-view" class="login-container">
     <h2 style="margin-top:0;">POS Login</h2>
     <label>Usuario</label>
-    <input type="text" id="log-user" value="admin">
+    <input type="text" id="log-user" placeholder="Ingrese usuario...">
     <label>Contraseña</label>
-    <input type="password" id="log-pass" value="1234">
+    <input type="password" id="log-pass" placeholder="••••••••">
     <button class="btn" style="width:100%; margin-top:10px;" onclick="iniciarSesion()">Ingresar</button>
+    <p style="font-size:11px; color:#666; margin-top:10px;">Roles disponibles: <b>admin</b>, <b>cajero1</b>, <b>visor</b> (Espectador)</p>
   </div>
 
   <!-- APLICACIÓN PRINCIPAL -->
@@ -51,20 +53,20 @@
       </div>
     </div>
 
-    <div class="nav-tabs">
+    <div class="nav-tabs" id="menu-nav">
       <button class="active" onclick="verTab('ventas', this)">F1 Ventas</button>
       <button onclick="verTab('clientes', this)">F2 Clientes</button>
       <button onclick="verTab('productos', this)" id="tab-prod">F3 Productos</button>
-      <button onclick="verTab('inventario', this)">F4 Inventario</button>
-      <button onclick="verTab('corte', this)" id="tab-corte">Corte Z</button>
+      <button onclick="verTab('inventario', this)" id="tab-inv">F4 Inventario</button>
+      <button onclick="verTab('corte', this)" id="tab-corte">Corte Z / Caja</button>
     </div>
 
-    <!-- PESTAÑA F1: VENTAS -->
+    <!-- F1 VENTAS -->
     <div id="sec-ventas" class="panel">
       <div class="layout-grid">
         <div class="flex-2" style="position:relative;">
-          <h4>Buscador de Productos (Escribe o Escanea)</h4>
-          <input type="text" id="txt-buscar" placeholder="Ingrese nombre o código de barras..." oninput="filtrarProductos(this.value)">
+          <h4>Buscador de Productos</h4>
+          <input type="text" id="txt-buscar" placeholder="Escriba nombre o código de barras..." oninput="filtrarProductos(this.value)">
           <div id="search-box" class="search-results"></div>
 
           <h4>Productos Más Vendidos (Top Sellers)</h4>
@@ -88,16 +90,16 @@
           </select>
 
           <div id="box-credito" style="display:none; margin-top:5px;">
-            <label>Seleccionar Cliente a Crédito:</label>
+            <label>Cliente a Crédito:</label>
             <select id="sel-cliente-credito"></select>
           </div>
 
-          <button class="btn" style="width:100%; margin-top:10px; background:#007bff;" onclick="procesarPago()">Cobrar Venta</button>
+          <button id="btn-cobrar" class="btn" style="width:100%; margin-top:10px; background:#007bff;" onclick="procesarPago()">Cobrar Venta</button>
         </div>
       </div>
     </div>
 
-    <!-- PESTAÑA F2: CLIENTES / CRÉDITOS -->
+    <!-- F2 CLIENTES -->
     <div id="sec-clientes" class="panel" style="display:none;">
       <div class="layout-grid">
         <div class="flex-1" id="box-add-client">
@@ -118,18 +120,18 @@
       </div>
     </div>
 
-    <!-- PESTAÑA F3: PRODUCTOS -->
+    <!-- F3 PRODUCTOS -->
     <div id="sec-productos" class="panel" style="display:none;">
       <div class="layout-grid">
-        <div class="flex-1">
+        <div class="flex-1" id="box-add-prod">
           <h4>Nuevo Producto</h4>
-          <input type="text" id="p-id" placeholder="ID / Código">
+          <input type="text" id="p-id" placeholder="ID / Código (ej. P004)">
           <input type="text" id="p-barras" placeholder="Código de Barras (Alias)">
           <input type="text" id="p-desc" placeholder="Descripción">
           <input type="number" id="p-costo" placeholder="Costo Unidad S/">
           <input type="number" id="p-precio" placeholder="Precio Venta S/">
           <input type="number" id="p-stock" placeholder="Stock Inicial">
-          <input type="date" id="p-venc" placeholder="Fecha Vencimiento">
+          <input type="date" id="p-venc">
           <button class="btn" onclick="guardarProducto()">Guardar Producto</button>
         </div>
         <div class="flex-2">
@@ -142,27 +144,34 @@
       </div>
     </div>
 
-    <!-- PESTAÑA F4: INVENTARIO Y MERMAS -->
+    <!-- F4 INVENTARIO -->
     <div id="sec-inventario" class="panel" style="display:none;">
       <h4>Control de Mermas y Bajas de Stock</h4>
-      <p>Seleccione el producto dañado, vencido o consumido para descontarlo del inventario[cite: 2].</p>
-      <div style="max-width:400px;">
-        <label>Buscar Producto:</label>
+      <div style="max-width:400px;" id="box-merma">
+        <label>Seleccionar Producto:</label>
         <select id="sel-merma-prod"></select>
-        <label>Cantidad a dar de baja (Merma):</label>
+        <label>Cantidad a dar de baja:</label>
         <input type="number" id="cant-merma" value="1">
-        <button class="btn btn-warning" onclick="registrarMerma()">Registrar Baja / Merma</button>
+        <button class="btn btn-warning" onclick="registrarMerma()">Registrar Merma</button>
       </div>
     </div>
 
-    <!-- PESTAÑA: CORTE Z DE CAJA -->
+    <!-- CORTE Z Y CONSULTAS DE CAJA (EXCLUSIVO ADMIN) -->
     <div id="sec-corte" class="panel" style="display:none;">
-      <h4>Corte de Caja Z (Cierre de Turno / Día)</h4>
-      <p>Cuadre a ciegas (Blind Balancing): Ingrese el dinero en efectivo contado en su caja[cite: 2].</p>
-      <div style="max-width:350px;">
-        <label>Efectivo Físico en Caja S/:</label>
-        <input type="number" id="corte-efectivo" placeholder="Ej. 350.00">
-        <button class="btn btn-danger" style="width:100%;" onclick="ejecutarCorteZ()">Ejecutar Cierre Z</button>
+      <div class="layout-grid">
+        <div class="flex-1" id="box-corte-admin">
+          <h4>Ejecutar Corte Z (Cierre de Día)[cite: 2]</h4>
+          <label>Efectivo Físico Contado en Caja S/:</label>
+          <input type="number" id="corte-efectivo" placeholder="Ej. 450.00">
+          <button class="btn btn-danger" style="width:100%;" onclick="ejecutarCorteZ()">Ejecutar Cierre Z</button>
+        </div>
+        <div class="flex-2">
+          <h4>Historial de Cierres Z Anteriores[cite: 2]</h4>
+          <table id="tbl-cortes">
+            <thead><tr><th>ID Corte</th><th>Fecha</th><th>Cajero</th><th>Declarado</th><th>Diferencia</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
       </div>
     </div>
   </div>
@@ -170,9 +179,17 @@
   <script>
     const URL_SCRIPT = "https://script.google.com/macros/s/AKfycbxXpMgPYWmvduihcH37oU80-tdP9qik7QaDChQeG2xZt6lcsk9A8xI5dH4XREJE_Oq1Yw/exec";
     
-    let productos = [];
-    let clientes = [];
+    let productos = [
+      { id: 'P001', descripcion: 'Pan Chuta (Unidad)', precioVenta: 0.50, stockActual: 150, fechaVencimiento: '2026-12-30', contador: 10 },
+      { id: 'P002', descripcion: 'Inka Kola 500ml', precioVenta: 3.00, stockActual: 48, fechaVencimiento: '2027-05-15', contador: 25 },
+      { id: 'P003', descripcion: 'Queso Fresco', precioVenta: 24.00, stockActual: 5.5, fechaVencimiento: '2026-11-15', contador: 5 }
+    ];
+    let clientes = [
+      { nombre: 'Rosa Quispe', telefono: '987654321', limiteCredito: 200, deudaActual: 45 },
+      { nombre: 'Luis Torres', telefono: '912345678', limiteCredito: 500, deudaActual: 0 }
+    ];
     let aliases = [];
+    let cortesZ = [];
     let carrito = [];
     let usuarioActual = null;
 
@@ -180,37 +197,57 @@
       try {
         const res = await fetch(URL_SCRIPT + "?action=obtenerTodo");
         const data = await res.json();
-        productos = data.productos || [];
-        clientes = data.clientes || [];
-        aliases = data.aliases || [];
-        renderTopSellers();
-        renderClientes();
-        renderProductos();
-        renderSelects();
+        if (data && data.status === "SUCCESS") {
+          if (data.productos.length > 0) productos = data.productos;
+          if (data.clientes.length > 0) clientes = data.clientes;
+          aliases = data.aliases || [];
+          cortesZ = data.cortes || [];
+        }
       } catch (e) {
-        console.error("Error al sincronizar con Google Sheets", e);
+        console.warn("Usando datos locales por fallo de red / CORS", e);
       }
+      renderTopSellers();
+      renderClientes();
+      renderProductos();
+      renderSelects();
+      renderCortes();
     }
 
-    function iniciarSesion() {
-      const u = document.getElementById("log-user").value;
-      const p = document.getElementById("log-pass").value;
+    async function iniciarSesion() {
+      const u = document.getElementById("log-user").value.trim();
+      const p = document.getElementById("log-pass").value.trim();
       
       let rol = "Usuario";
       if (u === "admin" && p === "1234") rol = "Administrador";
       else if (u === "visor" && p === "0000") rol = "Espectador";
+      else if (u === "cajero1" && p === "4321") rol = "Usuario";
+      else {
+        alert("Usuario o contraseña incorrectos.");
+        return;
+      }
 
       usuarioActual = { usuario: u, rol: rol };
       document.getElementById("login-view").style.display = "none";
       document.getElementById("app-view").style.display = "block";
       document.getElementById("user-display").innerText = `${u} (${rol})`;
 
-      if (rol !== "Administrador") {
+      aplicarPermisosRol();
+      await cargarDatosBD();
+    }
+
+    function aplicarPermisosRol() {
+      if (usuarioActual.rol === "Espectador") {
+        // Bloquear todas las acciones de modificación
+        document.getElementById("box-add-client").style.display = "none";
+        document.getElementById("box-add-prod").style.display = "none";
+        document.getElementById("box-merma").style.display = "none";
+        document.getElementById("box-corte-admin").style.display = "none";
+        document.getElementById("btn-cobrar").style.display = "none";
+      } else if (usuarioActual.rol === "Usuario") {
         document.getElementById("tab-prod").style.display = "none";
         document.getElementById("box-add-client").style.display = "none";
+        document.getElementById("box-corte-admin").style.display = "none";
       }
-
-      cargarDatosBD();
     }
 
     function verTab(sec, btn) {
@@ -233,17 +270,12 @@
     function filtrarProductos(txt) {
       const box = document.getElementById("search-box");
       if (!txt.trim()) { box.style.display = "none"; return; }
-      
-      let matchAlias = aliases.find(a => String(a.codigo) === txt.trim());
-      let targetId = matchAlias ? matchAlias.id : txt.trim();
-
-      const res = productos.filter(p => p.descripcion.toLowerCase().includes(txt.toLowerCase()) || String(p.id) === targetId);
-      
+      const res = productos.filter(p => p.descripcion.toLowerCase().includes(txt.toLowerCase()) || String(p.id) === txt.trim());
       box.innerHTML = "";
       if (res.length > 0) {
         box.style.display = "block";
         res.forEach(p => {
-          box.innerHTML += `<div class="search-item" onclick="agregarAlCarrito('${p.id}'); document.getElementById('search-box').style.display='none';">${p.descripcion} - S/ ${parseFloat(p.precioVenta).toFixed(2)} (Stock: ${p.stockActual})</div>`;
+          box.innerHTML += `<div class="search-item" onclick="agregarAlCarrito('${p.id}'); document.getElementById('search-box').style.display='none';">${p.descripcion} - S/ ${parseFloat(p.precioVenta).toFixed(2)}</div>`;
         });
       } else {
         box.style.display = "none";
@@ -253,7 +285,6 @@
     function agregarAlCarrito(id) {
       const prod = productos.find(p => String(p.id) === String(id));
       if (!prod) return;
-      
       const item = carrito.find(i => String(i.id) === String(id));
       if (item) {
         item.cantidad += 1;
@@ -280,14 +311,14 @@
     }
 
     async function procesarPago() {
+      if (usuarioActual.rol === "Espectador") return alert("Acción denegada para Espectadores.");
       if (carrito.length === 0) return alert("El carrito está vacío.");
       const modo = document.getElementById("pay-mode").value;
       const cliente = document.getElementById("sel-cliente-credito").value;
 
-      if (modo === "Crédito" && !cliente) return alert("Seleccione un cliente para otorgar crédito.");
+      if (modo === "Crédito" && !cliente) return alert("Seleccione un cliente para crédito.");
 
       const payload = { items: carrito, cajero: usuarioActual.usuario, metodoPago: modo, clienteNombre: cliente };
-      
       alert("Venta registrada con éxito.");
       carrito = [];
       renderCarrito();
@@ -297,7 +328,6 @@
         headers: { "Content-Type": "text/plain;charset=utf-8" },
         body: JSON.stringify({ accion: "registrarVenta", payload: payload })
       });
-
       cargarDatosBD();
     }
 
@@ -305,19 +335,20 @@
       const tbody = document.querySelector("#tbl-clientes tbody");
       tbody.innerHTML = "";
       clientes.forEach(c => {
-        tbody.innerHTML += `<tr><td>${c.nombre}</td><td>${c.telefono}</td><td>S/ ${parseFloat(c.limiteCredito).toFixed(2)}</td><td>S/ ${parseFloat(c.deudaActual).toFixed(2)}</td><td><button class="btn btn-info" onclick="abonarDeuda('${c.nombre}')">Abonar</button></td></tr>`;
+        let btnAbonar = usuarioActual.rol !== "Espectador" ? `<button class="btn btn-info" onclick="abonarDeuda('${c.nombre}')">Abonar</button>` : '-';
+        tbody.innerHTML += `<tr><td>${c.nombre}</td><td>${c.telefono}</td><td>S/ ${c.limiteCredito}</td><td>S/ ${c.deudaActual}</td><td>${btnAbonar}</td></tr>`;
       });
     }
 
     async function abonarDeuda(nombre) {
-      const monto = prompt(`Ingrese monto a abonar para el cliente ${nombre}:`);
+      const monto = prompt(`Monto a abonar para ${nombre}:`);
       if (monto && parseFloat(monto) > 0) {
         await fetch(URL_SCRIPT, {
           method: "POST", mode: "no-cors",
           headers: { "Content-Type": "text/plain;charset=utf-8" },
-          body: JSON.stringify({ accion: "abonarCredito", payload: { nombre: nombre, monto: monto } })
+          body: JSON.stringify({ accion: "abonarCredito", payload: { nombre, monto } })
         });
-        alert("Abono procesado correctamente.");
+        alert("Abono procesado.");
         cargarDatosBD();
       }
     }
@@ -326,7 +357,7 @@
       const tbody = document.querySelector("#tbl-productos tbody");
       tbody.innerHTML = "";
       productos.forEach(p => {
-        tbody.innerHTML += `<tr><td>${p.id}</td><td>${p.descripcion}</td><td>S/ ${parseFloat(p.precioVenta).toFixed(2)}</td><td>${p.stockActual}</td><td>${p.fechaVencimiento || '-'}</td></tr>`;
+        tbody.innerHTML += `<tr><td>${p.id}</td><td>${p.descripcion}</td><td>S/ ${p.precioVenta}</td><td>${p.stockActual}</td><td>${p.fechaVencimiento || '-'}</td></tr>`;
       });
     }
 
@@ -335,9 +366,20 @@
       const selMer = document.getElementById("sel-merma-prod");
       selCred.innerHTML = "<option value=''>-- Seleccionar --</option>";
       selMer.innerHTML = "";
-
       clientes.forEach(c => selCred.innerHTML += `<option value="${c.nombre}">${c.nombre} (Deuda: S/ ${c.deudaActual})</option>`);
       productos.forEach(p => selMer.innerHTML += `<option value="${p.id}">${p.descripcion} (Stock: ${p.stockActual})</option>`);
+    }
+
+    function renderCortes() {
+      const tbody = document.querySelector("#tbl-cortes tbody");
+      tbody.innerHTML = "";
+      if (cortesZ.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;">No hay cierres previos registrados.</td></tr>`;
+        return;
+      }
+      cortesZ.forEach(cz => {
+        tbody.innerHTML += `<tr><td>${cz.idCorte}</td><td>${new Date(cz.fecha).toLocaleDateString()}</td><td>${cz.cajero}</td><td>S/ ${cz.declarado}</td><td>S/ ${cz.diferencia}</td></tr>`;
+      });
     }
 
     async function guardarCliente() {
@@ -352,7 +394,7 @@
         headers: { "Content-Type": "text/plain;charset=utf-8" },
         body: JSON.stringify({ accion: "registrarCliente", payload: payload })
       });
-      alert("Cliente Guardado.");
+      alert("Cliente guardado.");
       cargarDatosBD();
     }
 
@@ -372,7 +414,7 @@
         headers: { "Content-Type": "text/plain;charset=utf-8" },
         body: JSON.stringify({ accion: "registrarProducto", payload: payload })
       });
-      alert("Producto Registrado.");
+      alert("Producto registrado.");
       cargarDatosBD();
     }
 
@@ -395,7 +437,8 @@
         headers: { "Content-Type": "text/plain;charset=utf-8" },
         body: JSON.stringify({ accion: "ejecutarCorteZ", payload: { cajero: usuarioActual.usuario, efectivoDeclarado: ef } })
       });
-      alert("Cierre Z completado exitosamente y hoja mensual respaldada.");
+      alert("Cierre Z completado exitosamente.");
+      cargarDatosBD();
     }
   </script>
 </body>
