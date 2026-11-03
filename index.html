@@ -32,7 +32,7 @@
 </head>
 <body>
 
-  <!-- LOGIN LIMPIO -->
+  <!-- LOGIN -->
   <div id="login-view" class="login-container">
     <h2 style="margin-top:0;">POS Login</h2>
     <label>Usuario</label>
@@ -156,7 +156,7 @@
       </div>
     </div>
 
-    <!-- CORTE Z Y CONSULTAS DE CAJA (EXCLUSIVO ADMIN) -->
+    <!-- CORTE Z Y CONSULTAS DE CAJA -->
     <div id="sec-corte" class="panel" style="display:none;">
       <div class="layout-grid">
         <div class="flex-1" id="box-corte-admin">
@@ -179,15 +179,8 @@
   <script>
     const URL_SCRIPT = "https://script.google.com/macros/s/AKfycbxXpMgPYWmvduihcH37oU80-tdP9qik7QaDChQeG2xZt6lcsk9A8xI5dH4XREJE_Oq1Yw/exec";
     
-    let productos = [
-      { id: 'P001', descripcion: 'Pan Chuta (Unidad)', precioVenta: 0.50, stockActual: 150, fechaVencimiento: '2026-12-30', contador: 10 },
-      { id: 'P002', descripcion: 'Inka Kola 500ml', precioVenta: 3.00, stockActual: 48, fechaVencimiento: '2027-05-15', contador: 25 },
-      { id: 'P003', descripcion: 'Queso Fresco', precioVenta: 24.00, stockActual: 5.5, fechaVencimiento: '2026-11-15', contador: 5 }
-    ];
-    let clientes = [
-      { nombre: 'Rosa Quispe', telefono: '987654321', limiteCredito: 200, deudaActual: 45 },
-      { nombre: 'Luis Torres', telefono: '912345678', limiteCredito: 500, deudaActual: 0 }
-    ];
+    let productos = [];
+    let clientes = [];
     let aliases = [];
     let cortesZ = [];
     let carrito = [];
@@ -198,13 +191,13 @@
         const res = await fetch(URL_SCRIPT + "?action=obtenerTodo");
         const data = await res.json();
         if (data && data.status === "SUCCESS") {
-          if (data.productos.length > 0) productos = data.productos;
-          if (data.clientes.length > 0) clientes = data.clientes;
+          productos = data.productos || [];
+          clientes = data.clientes || [];
           aliases = data.aliases || [];
           cortesZ = data.cortes || [];
         }
       } catch (e) {
-        console.warn("Usando datos locales por fallo de red / CORS", e);
+        console.warn("Error de conexión al obtener datos", e);
       }
       renderTopSellers();
       renderClientes();
@@ -237,7 +230,6 @@
 
     function aplicarPermisosRol() {
       if (usuarioActual.rol === "Espectador") {
-        // Bloquear todas las acciones de modificación
         document.getElementById("box-add-client").style.display = "none";
         document.getElementById("box-add-prod").style.display = "none";
         document.getElementById("box-merma").style.display = "none";
@@ -270,7 +262,11 @@
     function filtrarProductos(txt) {
       const box = document.getElementById("search-box");
       if (!txt.trim()) { box.style.display = "none"; return; }
-      const res = productos.filter(p => p.descripcion.toLowerCase().includes(txt.toLowerCase()) || String(p.id) === txt.trim());
+      
+      let matchAlias = aliases.find(a => String(a.codigo).trim() === txt.trim());
+      let targetId = matchAlias ? matchAlias.id : txt.trim();
+
+      const res = productos.filter(p => p.descripcion.toLowerCase().includes(txt.toLowerCase()) || String(p.id).trim() === targetId);
       box.innerHTML = "";
       if (res.length > 0) {
         box.style.display = "block";
@@ -283,9 +279,9 @@
     }
 
     function agregarAlCarrito(id) {
-      const prod = productos.find(p => String(p.id) === String(id));
+      const prod = productos.find(p => String(p.id).trim() === String(id).trim());
       if (!prod) return;
-      const item = carrito.find(i => String(i.id) === String(id));
+      const item = carrito.find(i => String(i.id).trim() === String(id).trim());
       if (item) {
         item.cantidad += 1;
         item.total = item.cantidad * item.precioUnitario;
@@ -311,7 +307,7 @@
     }
 
     async function procesarPago() {
-      if (usuarioActual.rol === "Espectador") return alert("Acción denegada para Espectadores.");
+      if (usuarioActual.rol === "Espectador") return alert("Acción denegada.");
       if (carrito.length === 0) return alert("El carrito está vacío.");
       const modo = document.getElementById("pay-mode").value;
       const cliente = document.getElementById("sel-cliente-credito").value;
@@ -319,16 +315,19 @@
       if (modo === "Crédito" && !cliente) return alert("Seleccione un cliente para crédito.");
 
       const payload = { items: carrito, cajero: usuarioActual.usuario, metodoPago: modo, clienteNombre: cliente };
-      alert("Venta registrada con éxito.");
-      carrito = [];
-      renderCarrito();
 
-      await fetch(URL_SCRIPT, {
-        method: "POST", mode: "no-cors",
-        headers: { "Content-Type": "text/plain;charset=utf-8" },
-        body: JSON.stringify({ accion: "registrarVenta", payload: payload })
-      });
-      cargarDatosBD();
+      try {
+        await fetch(URL_SCRIPT, {
+          method: "POST",
+          body: JSON.stringify({ accion: "registrarVenta", payload: payload })
+        });
+        alert("¡Venta registrada con éxito en el Excel!");
+        carrito = [];
+        renderCarrito();
+        await cargarDatosBD();
+      } catch (e) {
+        alert("Error al registrar la venta.");
+      }
     }
 
     function renderClientes() {
@@ -341,15 +340,18 @@
     }
 
     async function abonarDeuda(nombre) {
-      const monto = prompt(`Monto a abonar para ${nombre}:`);
+      const monto = prompt(`Ingrese el monto a abonar para el cliente ${nombre}:`);
       if (monto && parseFloat(monto) > 0) {
-        await fetch(URL_SCRIPT, {
-          method: "POST", mode: "no-cors",
-          headers: { "Content-Type": "text/plain;charset=utf-8" },
-          body: JSON.stringify({ accion: "abonarCredito", payload: { nombre, monto } })
-        });
-        alert("Abono procesado.");
-        cargarDatosBD();
+        try {
+          await fetch(URL_SCRIPT, {
+            method: "POST",
+            body: JSON.stringify({ accion: "abonarCredito", payload: { nombre: nombre, monto: monto } })
+          });
+          alert("¡Abono registrado correctamente y deuda actualizada en el Excel!");
+          await cargarDatosBD();
+        } catch (e) {
+          alert("Error al procesar el abono.");
+        }
       }
     }
 
@@ -389,13 +391,9 @@
         telefono: document.getElementById("cli-tel").value,
         limiteCredito: document.getElementById("cli-lim").value
       };
-      await fetch(URL_SCRIPT, {
-        method: "POST", mode: "no-cors",
-        headers: { "Content-Type": "text/plain;charset=utf-8" },
-        body: JSON.stringify({ accion: "registrarCliente", payload: payload })
-      });
+      await fetch(URL_SCRIPT, { method: "POST", body: JSON.stringify({ accion: "registrarCliente", payload: payload }) });
       alert("Cliente guardado.");
-      cargarDatosBD();
+      await cargarDatosBD();
     }
 
     async function guardarProducto() {
@@ -409,36 +407,24 @@
         fechaVencimiento: document.getElementById("p-venc").value,
         aGranel: "NO", unidadMedida: "unidad", unidadesEmpaque: 1, costoMayor: 0, stockMinimo: 5, categoria: "General"
       };
-      await fetch(URL_SCRIPT, {
-        method: "POST", mode: "no-cors",
-        headers: { "Content-Type": "text/plain;charset=utf-8" },
-        body: JSON.stringify({ accion: "registrarProducto", payload: payload })
-      });
+      await fetch(URL_SCRIPT, { method: "POST", body: JSON.stringify({ accion: "registrarProducto", payload: payload }) });
       alert("Producto registrado.");
-      cargarDatosBD();
+      await cargarDatosBD();
     }
 
     async function registrarMerma() {
       const pId = document.getElementById("sel-merma-prod").value;
       const cant = document.getElementById("cant-merma").value;
-      await fetch(URL_SCRIPT, {
-        method: "POST", mode: "no-cors",
-        headers: { "Content-Type": "text/plain;charset=utf-8" },
-        body: JSON.stringify({ accion: "registrarMerma", payload: { id: pId, cantidad: cant } })
-      });
+      await fetch(URL_SCRIPT, { method: "POST", body: JSON.stringify({ accion: "registrarMerma", payload: { id: pId, cantidad: cant } }) });
       alert("Merma registrada.");
-      cargarDatosBD();
+      await cargarDatosBD();
     }
 
     async function ejecutarCorteZ() {
       const ef = parseFloat(document.getElementById("corte-efectivo").value) || 0;
-      await fetch(URL_SCRIPT, {
-        method: "POST", mode: "no-cors",
-        headers: { "Content-Type": "text/plain;charset=utf-8" },
-        body: JSON.stringify({ accion: "ejecutarCorteZ", payload: { cajero: usuarioActual.usuario, efectivoDeclarado: ef } })
-      });
+      await fetch(URL_SCRIPT, { method: "POST", body: JSON.stringify({ accion: "ejecutarCorteZ", payload: { cajero: usuarioActual.usuario, efectivoDeclarado: ef } }) });
       alert("Cierre Z completado exitosamente.");
-      cargarDatosBD();
+      await cargarDatosBD();
     }
   </script>
 </body>
