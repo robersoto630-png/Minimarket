@@ -36,11 +36,11 @@
   <div id="login-view" class="login-container">
     <h2 style="margin-top:0;">POS Login</h2>
     <label>Usuario</label>
-    <input type="text" id="log-user" placeholder="Ingrese usuario...">
+    <input type="text" id="log-user" placeholder="admin, cajero1 o visor">
     <label>Contraseña</label>
     <input type="password" id="log-pass" placeholder="••••••••">
     <button class="btn" style="width:100%; margin-top:10px;" onclick="iniciarSesion()">Ingresar</button>
-    <p style="font-size:11px; color:#666; margin-top:10px;">Roles: <b>admin</b> (1234), <b>cajero1</b> (4321), <b>visor</b> (0000)</p>
+    <p style="font-size:11px; color:#666; margin-top:10px;">Claves de prueba: <b>admin</b> (1234), <b>cajero1</b> (4321), <b>visor</b> (0000)</p>
   </div>
 
   <!-- APLICACIÓN PRINCIPAL -->
@@ -144,13 +144,13 @@
       </div>
     </div>
 
-    <!-- F4 INVENTARIO Y MERMAS (Con buscador interactivo) -->
+    <!-- F4 INVENTARIO -->
     <div id="sec-inventario" class="panel" style="display:none;">
       <h4>Control de Mermas y Bajas de Stock</h4>
       <div style="max-width:450px;" id="box-merma">
         <label>Buscar Producto para Merma:</label>
-        <input type="text" id="txt-buscar-merma" placeholder="Escriba para filtrar productos..." oninput="filtrarMerma(this.value)">
-        <select id="sel-merma-prod" size="5" style="width:150px; margin-top:5px; height:120px;"></select>
+        <input type="text" id="txt-buscar-merma" placeholder="Escriba para filtrar..." oninput="filtrarMerma(this.value)">
+        <select id="sel-merma-prod" size="5" style="margin-top:5px; height:120px;"></select>
         
         <input type="hidden" id="merma-id-seleccionado">
         <div id="lbl-prod-elegido" style="font-weight:bold; color:#0056b3; margin:5px 0;">Seleccionado: Ninguno</div>
@@ -161,17 +161,17 @@
       </div>
     </div>
 
-    <!-- CORTE Z Y CONSULTAS DE CAJA -->
+    <!-- CORTE Z -->
     <div id="sec-corte" class="panel" style="display:none;">
       <div class="layout-grid">
         <div class="flex-1" id="box-corte-admin">
-          <h4>Ejecutar Corte Z (Cierre de Día)[cite: 2]</h4>
+          <h4>Ejecutar Corte Z (Cierre de Día)</h4>
           <label>Efectivo Físico Contado en Caja S/:</label>
           <input type="number" id="corte-efectivo" placeholder="Ej. 450.00">
           <button class="btn btn-danger" style="width:100%;" onclick="ejecutarCorteZ()">Ejecutar Cierre Z</button>
         </div>
         <div class="flex-2">
-          <h4>Historial de Cierres Z Anteriores[cite: 2]</h4>
+          <h4>Historial de Cierres Z Anteriores</h4>
           <table id="tbl-cortes">
             <thead><tr><th>ID Corte</th><th>Fecha</th><th>Cajero</th><th>Declarado</th><th>Diferencia</th></tr></thead>
             <tbody></tbody>
@@ -190,18 +190,27 @@
     let usuarioActual = null;
 
     function cargarDatosBD() {
-      google.script.run.withSuccessHandler(data => {
-        productos = data.productos || [];
-        clientes = data.clientes || [];
-        aliases = data.aliases || [];
-        cortesZ = data.cortes || [];
-        
-        renderTopSellers();
-        renderClientes();
-        renderProductos();
-        renderSelects();
-        renderCortes();
-      }).obtenerTodo();
+      google.script.run
+        .withSuccessHandler(res => {
+          if (res && res.status === "SUCCESS") {
+            productos = res.productos || [];
+            clientes = res.clientes || [];
+            aliases = res.aliases || [];
+            cortesZ = res.cortes || [];
+            
+            renderTopSellers();
+            renderClientes();
+            renderProductos();
+            renderSelects();
+            renderCortes();
+          } else {
+            alert("Error al leer Excel: " + (res ? res.message : "Desconocido"));
+          }
+        })
+        .withFailureHandler(err => {
+          alert("Error de conexión con Apps Script: " + err.message);
+        })
+        .obtenerTodo();
     }
 
     function iniciarSesion() {
@@ -253,7 +262,7 @@
       topContainer.innerHTML = "";
       const ordenados = [...productos].sort((a,b) => (b.contador || 0) - (a.contador || 0)).slice(0, 6);
       ordenados.forEach(p => {
-        topContainer.innerHTML += `<div class="btn-quick" onclick="agregarAlCarrito('${p.id}')">${p.descripcion}<br><b>S/ ${parseFloat(p.precioVenta).toFixed(2)}</b></div>`;
+        topContainer.innerHTML += `<div class="btn-quick" onclick="agregarAlCarrito('${p.id}')">${p.descripcion}<br><b>S/ ${parseFloat(p.precioVenta || 0).toFixed(2)}</b></div>`;
       });
     }
 
@@ -269,7 +278,7 @@
       if (res.length > 0) {
         box.style.display = "block";
         res.forEach(p => {
-          box.innerHTML += `<div class="search-item" onclick="agregarAlCarrito('${p.id}'); document.getElementById('search-box').style.display='none'; document.getElementById('txt-buscar').value='';">${p.descripcion} - S/ ${parseFloat(p.precioVenta).toFixed(2)}</div>`;
+          box.innerHTML += `<div class="search-item" onclick="agregarAlCarrito('${p.id}'); document.getElementById('search-box').style.display='none'; document.getElementById('txt-buscar').value='';">${p.descripcion} - S/ ${parseFloat(p.precioVenta || 0).toFixed(2)} (Stock: ${p.stockActual})</div>`;
         });
       } else {
         box.style.display = "none";
@@ -284,7 +293,7 @@
         item.cantidad += 1;
         item.total = item.cantidad * item.precioUnitario;
       } else {
-        carrito.push({ id: prod.id, descripcion: prod.descripcion, cantidad: 1, precioUnitario: parseFloat(prod.precioVenta), total: parseFloat(prod.precioVenta) });
+        carrito.push({ id: prod.id, descripcion: prod.descripcion, cantidad: 1, precioUnitario: parseFloat(prod.precioVenta || 0), total: parseFloat(prod.precioVenta || 0) });
       }
       renderCarrito();
     }
@@ -310,15 +319,19 @@
       const modo = document.getElementById("pay-mode").value;
       const cliente = document.getElementById("sel-cliente-credito").value;
 
-      if (modo === "Crédito" && !cliente) return alert("Seleccione un cliente para crédito.");
+      if (modo === "Crédito" && !cliente) return alert("Seleccione un cliente para otorgar crédito.");
 
       const payload = { items: carrito, cajero: usuarioActual.usuario, metodoPago: modo, clienteNombre: cliente };
 
-      google.script.run.withSuccessHandler(() => {
-        alert("¡Venta registrada con éxito y Excel actualizado!");
-        carrito = [];
-        renderCarrito();
-        cargarDatosBD();
+      google.script.run.withSuccessHandler(res => {
+        if(res.status === "SUCCESS") {
+          alert("¡Venta registrada con éxito y guardada en el Excel!");
+          carrito = [];
+          renderCarrito();
+          cargarDatosBD();
+        } else {
+          alert("Error al registrar venta: " + res.message);
+        }
       }).registrarVenta(payload);
     }
 
@@ -334,9 +347,13 @@
     function abonarDeuda(nombre) {
       const monto = prompt(`Ingrese el monto a abonar para el cliente ${nombre}:`);
       if (monto && parseFloat(monto) > 0) {
-        google.script.run.withSuccessHandler(() => {
-          alert("¡Abono registrado, deuda actualizada y Excel sincronizado!");
-          cargarDatosBD();
+        google.script.run.withSuccessHandler(res => {
+          if(res.status === "SUCCESS") {
+            alert("¡Abono registrado correctamente y deuda actualizada en el Excel!");
+            cargarDatosBD();
+          } else {
+            alert("Error al procesar el abono.");
+          }
         }).abonarCredito({ nombre: nombre, monto: monto });
       }
     }
@@ -361,7 +378,7 @@
       const selMer = document.getElementById("sel-merma-prod");
       selMer.innerHTML = "";
       lista.forEach(p => {
-        selMer.innerHTML += `<option value="${p.id}" onclick="seleccionarMerma('${p.id}', '${p.descripcion}')">${p.descripcion} (Stock: ${p.stockActual})</option>`;
+        selMer.innerHTML += `<option value="${p.id}">${p.descripcion} (Stock: ${p.stockActual})</option>`;
       });
       selMer.onchange = function() {
         const selectedOpt = selMer.options[selMer.selectedIndex];
@@ -385,7 +402,7 @@
         return;
       }
       cortesZ.forEach(cz => {
-        tbody.innerHTML += `<tr><td>${cz.idCorte}</td><td>${new Date(cz.fecha).toLocaleDateString()}</td><td>${cz.cajero}</td><td>S/ ${cz.declarado}</td><td>S/ ${cz.diferencia}</td></tr>`;
+        tbody.innerHTML += `<tr><td>${cz.idCorte}</td><td>${cz.fecha}</td><td>${cz.cajero}</td><td>S/ ${cz.declarado}</td><td>S/ ${cz.diferencia}</td></tr>`;
       });
     }
 
@@ -396,8 +413,8 @@
         telefono: document.getElementById("cli-tel").value,
         limiteCredito: document.getElementById("cli-lim").value
       };
-      google.script.run.withSuccessHandler(() => {
-        alert("Cliente guardado en el Excel.");
+      google.script.run.withSuccessHandler(res => {
+        alert("Cliente registrado correctamente en la hoja Clientes.");
         cargarDatosBD();
       }).registrarCliente(payload);
     }
@@ -413,8 +430,8 @@
         fechaVencimiento: document.getElementById("p-venc").value,
         aGranel: "NO", unidadMedida: "unidad", unidadesEmpaque: 1, costoMayor: 0, stockMinimo: 5, categoria: "General"
       };
-      google.script.run.withSuccessHandler(() => {
-        alert("Producto registrado en el Excel.");
+      google.script.run.withSuccessHandler(res => {
+        alert("Producto registrado en la hoja Productos.");
         cargarDatosBD();
       }).registrarProducto(payload);
     }
@@ -422,18 +439,18 @@
     function registrarMerma() {
       const pId = document.getElementById("merma-id-seleccionado").value;
       const cant = document.getElementById("cant-merma").value;
-      if(!pId) return alert("Seleccione un producto para la merma.");
+      if(!pId) return alert("Seleccione un producto en la lista.");
       
-      google.script.run.withSuccessHandler(() => {
-        alert("Merma registrada y stock actualizado.");
+      google.script.run.withSuccessHandler(res => {
+        alert("Merma registrada y stock actualizado en el Excel.");
         cargarDatosBD();
       }).registrarMerma({ id: pId, cantidad: cant });
     }
 
     function ejecutarCorteZ() {
       const ef = parseFloat(document.getElementById("corte-efectivo").value) || 0;
-      google.script.run.withSuccessHandler(() => {
-        alert("Cierre Z completado exitosamente y registrado en el Excel[cite: 2].");
+      google.script.run.withSuccessHandler(res => {
+        alert("¡Cierre Z completado exitosamente y guardado en el Excel!");
         cargarDatosBD();
       }).ejecutarCorteZ({ cajero: usuarioActual.usuario, efectivoDeclarado: ef });
     }
