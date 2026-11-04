@@ -8,7 +8,7 @@
   <style>
     body { font-family: Arial, sans-serif; margin: 0; background: #f4f6f9; color: #333; }
     .version-badge { position: fixed; bottom: 5px; right: 10px; background: #007bff; color: white; padding: 4px 10px; font-size: 11px; font-weight: bold; border-radius: 4px; z-index: 9999; }
-    .login-container { max-width: 360px; margin: 80px auto; background: white; padding: 25px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
+    .login-container { max-width: 380px; margin: 80px auto; background: white; padding: 25px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
     .header { display: flex; justify-content: space-between; align-items: center; background: #0056b3; color: white; padding: 10px 20px; }
     .nav-tabs { display: flex; gap: 4px; background: #e9ecef; padding: 8px; flex-wrap: wrap; }
     .nav-tabs button { padding: 10px 14px; border: none; background: white; cursor: pointer; font-weight: bold; border-radius: 4px; }
@@ -35,17 +35,18 @@
 </head>
 <body>
 
-  <div class="version-badge">Versión: v2.1</div>
+  <div class="version-badge">Versión: v3.0</div>
 
   <!-- LOGIN -->
   <div id="login-view" class="login-container">
     <h2 style="margin-top:0;">POS Login</h2>
+    <label>Monto de Caja Inicial S/ (Apertura)</label>
+    <input type="number" id="caja-inicial" value="100.00" step="0.01">
     <label>Usuario</label>
-    <input type="text" id="log-user" placeholder="Ingrese usuario...">
+    <input type="text" id="log-user" placeholder="admin, cajero1...">
     <label>Contraseña</label>
     <input type="password" id="log-pass" placeholder="••••••••">
-    <button class="btn" style="width:100%; margin-top:10px;" onclick="iniciarSesion()">Ingresar</button>
-    <p style="font-size:11px; color:#666; margin-top:10px;">Roles: <b>admin</b> (1234), <b>cajero1</b> (4321), <b>visor</b> (0000)</p>
+    <button class="btn" style="width:100%; margin-top:10px;" onclick="iniciarSesion()">Ingresar al Sistema</button>
   </div>
 
   <!-- APLICACIÓN PRINCIPAL -->
@@ -70,8 +71,8 @@
     <div id="sec-ventas" class="panel">
       <div class="layout-grid">
         <div class="flex-2" style="position:relative;">
-          <h4>Buscador de Productos</h4>
-          <input type="text" id="txt-buscar" placeholder="Escriba nombre o código de barras..." oninput="filtrarProductos(this.value)">
+          <h4>Buscador / Lector de Código de Barras (Pistola o Celular)</h4>
+          <input type="text" id="txt-buscar" placeholder="Escanee o escriba producto..." oninput="filtrarProductos(this.value)" onkeypress="detectarEscaner(event)">
           <div id="search-box" class="search-results"></div>
 
           <h4>Productos Más Vendidos (Top Sellers)</h4>
@@ -81,7 +82,7 @@
         <div class="flex-1" style="background:#f8f9fa; padding:12px; border-radius:6px; border:1px solid #ddd;">
           <h4>Carrito de Compras</h4>
           <table id="tbl-cart">
-            <thead><tr><th>Prod</th><th>Cant</th><th>Total</th><th>X</th></tr></thead>
+            <thead><tr><th>Prod / Lote Venc.</th><th>Cant</th><th>Total</th><th>X</th></tr></thead>
             <tbody></tbody>
           </table>
           <h2 id="lbl-total" style="color:#0056b3;">Total: S/ 0.00</h2>
@@ -89,8 +90,9 @@
           <label>Método de Pago:</label>
           <select id="pay-mode" onchange="toggleClienteCredito(this.value)">
             <option value="Efectivo">Efectivo</option>
-            <option value="Yape/Plin">Yape / Plin</option>
-            <option value="Tarjeta">Tarjeta</option>
+            <option value="Yape">Yape</option>
+            <option value="Plin">Plin</option>
+            <option value="Tarjeta">Tarjeta (Otras Formas)</option>
             <option value="Crédito">Crédito / Fiado</option>
           </select>
 
@@ -129,52 +131,56 @@
     <div id="sec-productos" class="panel" style="display:none;">
       <div class="layout-grid">
         <div class="flex-1" id="box-add-prod">
-          <h4>Nuevo Producto</h4>
+          <h4>Nuevo Producto / Lote</h4>
           
           <div style="background:#e9ecef; padding:8px; border-radius:4px; margin-bottom:8px;">
             <label style="font-size:12px; cursor:pointer;">
-              <input type="checkbox" id="chk-id-manual" onchange="toggleIdManual(this.checked)" style="width:auto;"> Ingresar ID Manualmente (Mismo producto / Otro código)
+              <input type="checkbox" id="chk-id-existente" onchange="toggleIdExistente(this.checked)" style="width:auto;"> ID_Codigo Existente (Mismo producto / Otro código barra)
             </label>
           </div>
 
-          <label>ID del Producto:</label>
+          <label>ID_Codigo:</label>
           <input type="text" id="p-id" readonly style="background:#e9ecef;" placeholder="Autogenerado...">
           
-          <label>Código de Barras (Alias):</label>
+          <div id="campos-nuevo-prod">
+            <label>Descripción:</label>
+            <input type="text" id="p-desc" placeholder="Nombre del producto">
+
+            <label>Costo Unidad S/:</label>
+            <input type="number" id="p-costo" step="0.01" placeholder="0.00">
+
+            <label>Precio Venta S/:</label>
+            <input type="number" id="p-precio" step="0.01" placeholder="0.00">
+
+            <label>Categoría:</label>
+            <input type="text" id="p-cat" value="General">
+          </div>
+
+          <label>Código de Barras:</label>
           <input type="text" id="p-barras" placeholder="Ej. 7750123456789">
 
-          <label>Descripción:</label>
-          <input type="text" id="p-desc" placeholder="Nombre del producto">
-
-          <label>Costo Unidad S/:</label>
-          <input type="number" id="p-costo" step="0.01" placeholder="0.00">
-
-          <label>Precio Venta S/:</label>
-          <input type="number" id="p-precio" step="0.01" placeholder="0.00">
-
-          <label>Stock Inicial:</label>
+          <label>Stock Actual (Lote):</label>
           <input type="number" id="p-stock" value="10">
 
           <label>Fecha de Vencimiento:</label>
           <input type="date" id="p-venc">
 
-          <button class="btn" onclick="guardarProducto()">Guardar Producto</button>
+          <button class="btn" onclick="guardarProducto()">Guardar Producto / Lote</button>
 
           <hr style="margin:15px 0;">
           <h4>Carga Masiva de Productos</h4>
-          <button class="btn btn-excel" style="width:100%; margin-bottom:5px;" onclick="descargarPlantillaExcel()">1. Descargar Plantilla Modelo</button>
-          <label style="font-size:12px;">Subir Excel Completo:</label>
+          <button class="btn btn-excel" style="width:100%; margin-bottom:5px;" onclick="descargarPlantillaExcel()">1. Descargar Plantilla</button>
           <input type="file" id="file-excel" accept=".xlsx, .xls" style="margin-bottom:5px;">
-          <button class="btn btn-warning" style="width:100%; color:black;" onclick="procesarExcelMasivo()">2. Subir y Registrar Masivo</button>
+          <button class="btn btn-warning" style="width:100%; color:black;" onclick="procesarExcelMasivo()">2. Subir Archivo Masivo</button>
         </div>
 
         <div class="flex-2">
           <div style="display:flex; justify-content:space-between; align-items:center;">
-            <h4>Catálogo Registrado (Top 100 con Mayor Stock)</h4>
-            <button class="btn btn-excel" onclick="descargarExcelProductos()">Descargar Stock Completo (.xlsx)</button>
+            <h4>Catálogo Registrado</h4>
+            <button class="btn btn-excel" onclick="descargarExcelProductos()">Descargar Stock (.xlsx)</button>
           </div>
           <table id="tbl-productos">
-            <thead><tr><th>ID</th><th>Descripción</th><th>Precio</th><th>Stock</th><th>Vencimiento</th></tr></thead>
+            <thead><tr><th>ID</th><th>Descripción</th><th>Precio</th><th>Stock Total</th></tr></thead>
             <tbody></tbody>
           </table>
         </div>
@@ -186,10 +192,11 @@
       <h4>Control de Mermas y Bajas de Stock</h4>
       <div style="max-width:450px;" id="box-merma">
         <label>Buscar Producto para Merma:</label>
-        <input type="text" id="txt-buscar-merma" placeholder="Escriba para filtrar productos..." oninput="filtrarMerma(this.value)">
+        <input type="text" id="txt-buscar-merma" placeholder="Escriba para filtrar..." oninput="filtrarMerma(this.value)">
         <select id="sel-merma-prod" size="5" style="margin-top:5px; height:120px; width:100%;"></select>
         
         <input type="hidden" id="merma-id-seleccionado">
+        <input type="hidden" id="merma-venc-seleccionado">
         <div id="lbl-prod-elegido" style="font-weight:bold; color:#0056b3; margin:8px 0;">Seleccionado: Ninguno</div>
 
         <label>Cantidad a dar de baja:</label>
@@ -203,14 +210,16 @@
       <div class="layout-grid">
         <div class="flex-1" id="box-corte-admin">
           <h4>Ejecutar Corte Z (Cierre de Día)[cite: 2]</h4>
-          <label>Efectivo Físico Contado en Caja S/:</label>
+          <label>Monto de Caja Inicial S/:</label>
+          <input type="number" id="corte-inicial" readonly style="background:#e9ecef;">
+          <label>Efectivo Físico Declarado en Caja S/:</label>
           <input type="number" id="corte-efectivo" placeholder="Ej. 450.00">
           <button class="btn btn-danger" style="width:100%;" onclick="ejecutarCorteZ()">Ejecutar Cierre Z</button>
         </div>
         <div class="flex-2">
           <h4>Historial de Cierres Z Anteriores[cite: 2]</h4>
           <table id="tbl-cortes">
-            <thead><tr><th>ID Corte</th><th>Fecha</th><th>Cajero</th><th>Declarado</th><th>Diferencia</th></tr></thead>
+            <thead><tr><th>ID Corte</th><th>Fecha</th><th>Cajero</th><th>Inicial</th><th>Efectivo</th><th>Yape</th><th>Plin</th><th>Diferencia</th></tr></thead>
             <tbody></tbody>
           </table>
         </div>
@@ -222,12 +231,12 @@
     const URL_SCRIPT = "https://script.google.com/macros/s/AKfycbxXpMgPYWmvduihcH37oU80-tdP9qik7QaDChQeG2xZt6lcsk9A8xI5dH4XREJE_Oq1Yw/exec";
     
     let productos = [];
-    let todosProductos = [];
+    let codigosBarra = [];
     let clientes = [];
-    let aliases = [];
     let cortesZ = [];
     let carrito = [];
     let usuarioActual = null;
+    let montoCajaInicial = 100.00;
 
     async function cargarDatosBD() {
       try {
@@ -235,9 +244,8 @@
         const data = await res.json();
         if (data && data.status === "SUCCESS") {
           productos = data.productos || [];
-          todosProductos = data.todosProductos || productos;
+          codigosBarra = data.codigosBarra || [];
           clientes = data.clientes || [];
-          aliases = data.aliases || [];
           cortesZ = data.cortes || [];
           generarIdAutomatico();
         }
@@ -247,33 +255,47 @@
       renderizarTodo();
     }
 
-    // Generar ID secuencial automático (Ej. P001, P002...)
     function generarIdAutomatico() {
-      if (!document.getElementById("chk-id-manual").checked) {
+      if (!document.getElementById("chk-id-existente").checked) {
         let maxNum = 0;
-        todosProductos.forEach(p => {
+        productos.forEach(p => {
           let match = p.id.match(/^P(\d+)$/i);
           if (match) {
             let num = parseInt(match[1], 10);
             if (num > maxNum) maxNum = num;
           }
         });
-        let siguienteId = "P" + String(maxNum + 1).padStart(3, '0');
-        document.getElementById("p-id").value = siguienteId;
+        document.getElementById("p-id").value = "P" + String(maxNum + 1).padStart(3, '0');
       }
     }
 
-    function toggleIdManual(esManual) {
+    function toggleIdExistente(esExistente) {
       const inputId = document.getElementById("p-id");
-      if (esManual) {
+      const camposNuevo = document.getElementById("campos-nuevo-prod");
+      if (esExistente) {
         inputId.removeAttribute("readonly");
         inputId.style.background = "white";
         inputId.value = "";
-        inputId.placeholder = "Ingrese ID personalizado...";
+        inputId.placeholder = "Ingrese ID existente...";
+        camposNuevo.style.display = "none";
       } else {
         inputId.setAttribute("readonly", true);
         inputId.style.background = "#e9ecef";
+        camposNuevo.style.display = "block";
         generarIdAutomatico();
+      }
+    }
+
+    // Detectar pistola lectora al presionar Enter o escaneo rápido
+    function detectarEscaner(e) {
+      if (e.key === 'Enter') {
+        const val = document.getElementById("txt-buscar").value.trim();
+        let match = codigosBarra.find(cb => cb.codigoBarras.toLowerCase() === val.toLowerCase());
+        if (match) {
+          agregarAlCarritoPorCodigo(match.codigoBarras);
+          document.getElementById("txt-buscar").value = "";
+          document.getElementById("search-box").style.display = "none";
+        }
       }
     }
 
@@ -296,6 +318,7 @@
     }
 
     function iniciarSesion() {
+      montoCajaInicial = parseFloat(document.getElementById("caja-inicial").value) || 0;
       const u = document.getElementById("log-user").value.trim();
       const p = document.getElementById("log-pass").value.trim();
       
@@ -311,24 +334,10 @@
       usuarioActual = { usuario: u, rol: rol };
       document.getElementById("login-view").style.display = "none";
       document.getElementById("app-view").style.display = "block";
-      document.getElementById("user-display").innerText = `${u} (${rol})`;
+      document.getElementById("user-display").innerText = `${u} (${rol}) | Caja Inicial: S/ ${montoCajaInicial.toFixed(2)}`;
+      document.getElementById("corte-inicial").value = montoCajaInicial.toFixed(2);
 
-      aplicarPermisosRol();
       cargarDatosBD();
-    }
-
-    function aplicarPermisosRol() {
-      if (usuarioActual.rol === "Espectador") {
-        document.getElementById("box-add-client").style.display = "none";
-        document.getElementById("box-add-prod").style.display = "none";
-        document.getElementById("box-merma").style.display = "none";
-        document.getElementById("box-corte-admin").style.display = "none";
-        document.getElementById("btn-cobrar").style.display = "none";
-      } else if (usuarioActual.rol === "Usuario") {
-        document.getElementById("tab-prod").style.display = "none";
-        document.getElementById("box-add-client").style.display = "none";
-        document.getElementById("box-corte-admin").style.display = "none";
-      }
     }
 
     function verTab(sec, btn) {
@@ -339,11 +348,10 @@
       btn.classList.add('active');
     }
 
-    // Renderizar Top Sellers basados en la columna contador del Excel
     function renderTopSellers() {
       const topContainer = document.getElementById("top-products");
       topContainer.innerHTML = "";
-      const ordenados = [...todosProductos].sort((a,b) => (b.contador || 0) - (a.contador || 0)).slice(0, 6);
+      const ordenados = [...productos].sort((a,b) => (b.contador || 0) - (a.contador || 0)).slice(0, 6);
       ordenados.forEach(p => {
         topContainer.innerHTML += `<div class="btn-quick" onclick="agregarAlCarrito('${p.id}')">${p.descripcion}<br><b>S/ ${parseFloat(p.precioVenta || 0).toFixed(2)}</b></div>`;
       });
@@ -354,30 +362,46 @@
       if (!txt || !txt.trim()) { box.style.display = "none"; return; }
       
       const query = txt.toLowerCase().trim();
-      let matchAlias = aliases.find(a => String(a.codigo).toLowerCase().trim() === query);
-      let targetId = matchAlias ? matchAlias.id : query;
-
-      const res = todosProductos.filter(p => p.descripcion.toLowerCase().includes(query) || String(p.id).toLowerCase().trim() === targetId);
+      const res = codigosBarra.filter(cb => cb.descripcion.toLowerCase().includes(query) || cb.codigoBarras.toLowerCase().includes(query) || cb.id.toLowerCase().includes(query));
       box.innerHTML = "";
       if (res.length > 0) {
         box.style.display = "block";
-        res.forEach(p => {
-          box.innerHTML += `<div class="search-item" onclick="agregarAlCarrito('${p.id}'); document.getElementById('search-box').style.display='none'; document.getElementById('txt-buscar').value='';">${p.descripcion} - S/ ${parseFloat(p.precioVenta || 0).toFixed(2)} (Stock: ${p.stockActual})</div>`;
+        res.forEach(cb => {
+          box.innerHTML += `<div class="search-item" onclick="agregarAlCarritoPorCodigo('${cb.codigoBarras}'); document.getElementById('search-box').style.display='none'; document.getElementById('txt-buscar').value='';">${cb.descripcion} | Venc: ${cb.fechaVencimiento || 'N/A'} | Stock: ${cb.stockActual} (S/ ${cb.precioVenta})</div>`;
         });
       } else {
         box.style.display = "none";
       }
     }
 
-    function agregarAlCarrito(id) {
-      const prod = todosProductos.find(p => String(p.id).trim() === String(id).trim());
-      if (!prod) return;
-      const item = carrito.find(i => String(i.id).trim() === String(id).trim());
+    function agregarAlCarrito(idProd) {
+      // Si tiene múltiples fechas de vencimiento, permitir elegir lote
+      const lotes = codigosBarra.filter(cb => cb.id === idProd && cb.stockActual > 0);
+      if (lotes.length === 0) return alert("Producto sin stock disponible.");
+      
+      if (lotes.length === 1) {
+        agregarItemCarritoFinal(lotes[0]);
+      } else {
+        let opciones = "Seleccione el lote por fecha de vencimiento:\n";
+        lotes.forEach((l, idx) => opciones += `${idx + 1}. Venc: ${l.fechaVencimiento} - Stock: ${l.stockActual}\n`);
+        let eleccion = prompt(opciones, "1");
+        let idxSel = parseInt(eleccion) - 1;
+        if (lotes[idxSel]) agregarItemCarritoFinal(lotes[idxSel]);
+      }
+    }
+
+    function agregarAlCarritoPorCodigo(codigo) {
+      const cb = codigosBarra.find(item => item.codigoBarras.toLowerCase() === codigo.toLowerCase());
+      if (cb) agregarItemCarritoFinal(cb);
+    }
+
+    function agregarItemCarritoFinal(cb) {
+      const item = carrito.find(i => i.id === cb.id && i.fechaVencimiento === cb.fechaVencimiento);
       if (item) {
         item.cantidad += 1;
         item.total = item.cantidad * item.precioUnitario;
       } else {
-        carrito.push({ id: prod.id, descripcion: prod.descripcion, cantidad: 1, precioUnitario: parseFloat(prod.precioVenta || 0), total: parseFloat(prod.precioVenta || 0) });
+        carrito.push({ id: cb.id, descripcion: cb.descripcion, cantidad: 1, precioUnitario: cb.precioVenta, total: cb.precioVenta, fechaVencimiento: cb.fechaVencimiento });
       }
       renderCarrito();
     }
@@ -388,7 +412,7 @@
       let total = 0;
       carrito.forEach((item, idx) => {
         total += item.total;
-        tbody.innerHTML += `<tr><td>${item.descripcion}</td><td>${item.cantidad}</td><td>S/ ${item.total.toFixed(2)}</td><td><button onclick="carrito.splice(${idx},1); renderCarrito();">X</button></td></tr>`;
+        tbody.innerHTML += `<tr><td>${item.descripcion}<br><small style="color:#666;">Venc: ${item.fechaVencimiento || 'N/A'}</small></td><td>${item.cantidad}</td><td>S/ ${item.total.toFixed(2)}</td><td><button onclick="carrito.splice(${idx},1); renderCarrito();">X</button></td></tr>`;
       });
       document.getElementById("lbl-total").innerText = "Total: S/ " + total.toFixed(2);
     }
@@ -398,7 +422,6 @@
     }
 
     async function procesarPago() {
-      if (usuarioActual.rol === "Espectador") return alert("Acción denegada.");
       if (carrito.length === 0) return alert("El carrito está vacío.");
       const modo = document.getElementById("pay-mode").value;
       const cliente = document.getElementById("sel-cliente-credito").value;
@@ -408,18 +431,17 @@
       const payload = { items: carrito, cajero: usuarioActual.usuario, metodoPago: modo, clienteNombre: cliente };
 
       await enviarServidor("registrarVenta", payload);
-      alert("¡Venta registrada con éxito y contadores de productos actualizados en el Excel!");
+      alert("¡Venta registrada con éxito, contadores de productos y lotes actualizados en el Excel!");
       carrito = [];
       renderCarrito();
-      setTimeout(cargarDatosBD, 1500);
+      setTimeout(cargarDatosBD, 1200);
     }
 
     function renderClientes() {
       const tbody = document.querySelector("#tbl-clientes tbody");
       tbody.innerHTML = "";
       clientes.forEach(c => {
-        let btnAbonar = usuarioActual.rol !== "Espectador" ? `<button class="btn btn-info" onclick="abonarDeuda('${c.nombre}')">Abonar</button>` : '-';
-        tbody.innerHTML += `<tr><td>${c.nombre}</td><td>${c.telefono}</td><td>S/ ${c.limiteCredito}</td><td>S/ ${c.deudaActual}</td><td>${btnAbonar}</td></tr>`;
+        tbody.innerHTML += `<tr><td>${c.nombre}</td><td>${c.telefono}</td><td>S/ ${c.limiteCredito}</td><td>S/ ${c.deudaActual}</td><td><button class="btn btn-info" onclick="abonarDeuda('${c.nombre}')">Abonar</button></td></tr>`;
       });
     }
 
@@ -427,8 +449,8 @@
       const monto = prompt(`Ingrese el monto a abonar para el cliente ${nombre}:`);
       if (monto && parseFloat(monto) > 0) {
         await enviarServidor("abonarCredito", { nombre: nombre, monto: monto });
-        alert("¡Abono procesado, deuda restada y registro guardado en la pestaña Creditos!");
-        setTimeout(cargarDatosBD, 1500);
+        alert("¡Abono procesado y registrado en la pestaña Creditos!");
+        setTimeout(cargarDatosBD, 1200);
       }
     }
 
@@ -436,7 +458,7 @@
       const tbody = document.querySelector("#tbl-productos tbody");
       tbody.innerHTML = "";
       productos.forEach(p => {
-        tbody.innerHTML += `<tr><td>${p.id}</td><td>${p.descripcion}</td><td>S/ ${p.precioVenta}</td><td>${p.stockActual}</td><td>${p.fechaVencimiento || '-'}</td></tr>`;
+        tbody.innerHTML += `<tr><td>${p.id}</td><td>${p.descripcion}</td><td>S/ ${p.precioVenta}</td><td>${p.stockActual}</td></tr>`;
       });
     }
 
@@ -445,26 +467,25 @@
       selCred.innerHTML = "<option value=''>-- Seleccionar --</option>";
       clientes.forEach(c => selCred.innerHTML += `<option value="${c.nombre}">${c.nombre} (Deuda: S/ ${c.deudaActual})</option>`);
       
-      llenarSelectMerma(todosProductos);
+      llenarSelectMerma(codigosBarra);
     }
 
     function llenarSelectMerma(lista) {
       const selMer = document.getElementById("sel-merma-prod");
       selMer.innerHTML = "";
-      lista.forEach(p => {
-        selMer.innerHTML += `<option value="${p.id}">${p.descripcion} (Stock: ${p.stockActual})</option>`;
+      lista.forEach(cb => {
+        selMer.innerHTML += `<option value="${cb.id}|${cb.fechaVencimiento}">${cb.descripcion} (Venc: ${cb.fechaVencimiento || 'N/A'} - Stock: ${cb.stockActual})</option>`;
       });
       selMer.onchange = function() {
-        const selectedOpt = selMer.options[selMer.selectedIndex];
-        if(selectedOpt) {
-          document.getElementById("merma-id-seleccionado").value = selMer.value;
-          document.getElementById("lbl-prod-elegido").innerText = "Seleccionado: " + selectedOpt.text;
-        }
+        const val = selMer.value.split('|');
+        document.getElementById("merma-id-seleccionado").value = val[0];
+        document.getElementById("merma-venc-seleccionado").value = val[1];
+        document.getElementById("lbl-prod-elegido").innerText = "Seleccionado ID: " + val[0] + " | Venc: " + val[1];
       };
     }
 
     function filtrarMerma(txt) {
-      const filtrados = todosProductos.filter(p => p.descripcion.toLowerCase().includes(txt.toLowerCase()) || String(p.id).includes(txt));
+      const filtrados = codigosBarra.filter(cb => cb.descripcion.toLowerCase().includes(txt.toLowerCase()) || cb.id.toLowerCase().includes(txt.toLowerCase()));
       llenarSelectMerma(filtrados);
     }
 
@@ -472,11 +493,11 @@
       const tbody = document.querySelector("#tbl-cortes tbody");
       tbody.innerHTML = "";
       if (cortesZ.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;">No hay cierres previos registrados.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;">No hay cierres previos registrados.</td></tr>`;
         return;
       }
       cortesZ.forEach(cz => {
-        tbody.innerHTML += `<tr><td>${cz.idCorte}</td><td>${cz.fecha}</td><td>${cz.cajero}</td><td>S/ ${cz.declarado}</td><td>S/ ${cz.diferencia}</td></tr>`;
+        tbody.innerHTML += `<tr><td>${cz.idCorte}</td><td>${cz.fecha}</td><td>${cz.cajero}</td><td>S/ ${cz.montoInicial}</td><td>S/ ${cz.efectivo}</td><td>S/ ${cz.yape}</td><td>S/ ${cz.plin}</td><td>S/ ${cz.diferencia}</td></tr>`;
       });
     }
 
@@ -489,45 +510,47 @@
       };
       await enviarServidor("registrarCliente", payload);
       alert("¡Cliente guardado en el Excel!");
-      setTimeout(cargarDatosBD, 1500);
+      setTimeout(cargarDatosBD, 1200);
     }
 
     async function guardarProducto() {
+      const esExistente = document.getElementById("chk-id-existente").checked;
       const payload = {
         id: document.getElementById("p-id").value,
         codigoBarras: document.getElementById("p-barras").value,
-        descripcion: document.getElementById("p-desc").value,
-        costoUnidad: document.getElementById("p-costo").value,
-        precioVenta: document.getElementById("p-precio").value,
-        stockActual: document.getElementById("p-stock").value,
-        fechaVencimiento: document.getElementById("p-venc").value
+        descripcion: esExistente ? "" : document.getElementById("p-desc").value,
+        costoUnidad: esExistente ? 0 : document.getElementById("p-costo").value,
+        precioVenta: esExistente ? 0 : document.getElementById("p-precio").value,
+        categoria: esExistente ? "" : document.getElementById("p-cat").value,
+        fechaVencimiento: document.getElementById("p-venc").value,
+        stockActual: document.getElementById("p-stock").value
       };
       await enviarServidor("registrarProducto", payload);
-      alert("¡Producto registrado y alias de barras guardado en el Excel!");
-      setTimeout(cargarDatosBD, 1500);
+      alert("¡Producto o lote registrado en las pestañas Productos y Cod_Barra_Alias!");
+      setTimeout(cargarDatosBD, 1200);
     }
 
     async function registrarMerma() {
-      const pId = document.getElementById("merma-id-seleccionado").value || document.getElementById("sel-merma-prod").value;
+      const pId = document.getElementById("merma-id-seleccionado").value;
+      const pVenc = document.getElementById("merma-venc-seleccionado").value;
       const cant = document.getElementById("cant-merma").value;
-      if(!pId) return alert("Seleccione un producto.");
+      if(!pId) return alert("Seleccione un lote de producto.");
       
-      await enviarServidor("registrarMerma", { id: pId, cantidad: cant });
-      alert("¡Merma registrada y stock descontado en el Excel!");
-      setTimeout(cargarDatosBD, 1500);
+      await enviarServidor("registrarMerma", { id: pId, fechaVencimiento: pVenc, cantidad: cant });
+      alert("¡Merma registrada y stock descontado del lote en el Excel!");
+      setTimeout(cargarDatosBD, 1200);
     }
 
     async function ejecutarCorteZ() {
       const ef = parseFloat(document.getElementById("corte-efectivo").value) || 0;
-      await enviarServidor("ejecutarCorteZ", { cajero: usuarioActual.usuario, efectivoDeclarado: ef });
-      alert("¡Cierre Z completado exitosamente y registrado en la hoja CorteCaja[cite: 2]!");
-      setTimeout(cargarDatosBD, 1500);
+      await enviarServidor("ejecutarCorteZ", { cajero: usuarioActual.usuario, montoInicial: montoCajaInicial, efectivoDeclarado: ef });
+      alert("¡Cierre Z completado y registrado en la hoja CorteCaja![cite: 2]");
+      setTimeout(cargarDatosBD, 1200);
     }
 
-    // Funciones de Excel (Plantilla, Importación y Exportación)
     function descargarPlantillaExcel() {
       const plantilla = [{
-        "id": "P999",
+        "id": "P001",
         "codigoBarras": "775000000000",
         "descripcion": "Ejemplo Producto",
         "costoUnidad": 2.50,
@@ -537,48 +560,37 @@
       }];
       const ws = XLSX.utils.json_to_sheet(plantilla);
       const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, "Plantilla_Productos");
+      XLSX.utils.book_append_sheet(wb, ws, "Plantilla");
       XLSX.writeFile(wb, "Plantilla_Carga_Productos.xlsx");
     }
 
     function procesarExcelMasivo() {
       const fileInput = document.getElementById("file-excel");
-      if (!fileInput.files.length) return alert("Seleccione un archivo Excel primero.");
+      if (!fileInput.files.length) return alert("Seleccione un archivo Excel.");
       
       const reader = new FileReader();
       reader.onload = async function(e) {
         try {
           const data = new Uint8Array(e.target.result);
           const workbook = XLSX.read(data, { type: 'array' });
-          const firstSheet = workbook.SheetNames[0];
-          const rows = XLSX.utils.sheet_to_json(workbook.Sheets[firstSheet]);
+          const rows = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]]);
           
-          if (rows.length === 0) return alert("El archivo Excel está vacío.");
-
           await enviarServidor("registroMasivoProductos", rows);
-          alert(`¡Se han importado ${rows.length} productos masivamente al Excel con éxito!`);
-          setTimeout(cargarDatosBD, 1500);
+          alert(`¡Se importaron ${rows.length} registros masivamente!`);
+          setTimeout(cargarDatosBD, 1200);
         } catch (err) {
-          alert("Error al procesar el archivo Excel: " + err.message);
+          alert("Error: " + err.message);
         }
       };
       reader.readAsArrayBuffer(fileInput.files[0]);
     }
 
     function descargarExcelProductos() {
-      if (todosProductos.length === 0) return alert("No hay datos para exportar.");
-      const dataExcel = todosProductos.map(p => ({
-        "ID": p.id,
-        "Descripción": p.descripcion,
-        "Precio Venta (S/)": p.precioVenta,
-        "Stock Actual": p.stockActual,
-        "Categoría": p.categoria,
-        "Fecha Vencimiento": p.fechaVencimiento
-      }));
-      const ws = XLSX.utils.json_to_sheet(dataExcel);
+      if (codigosBarra.length === 0) return alert("No hay datos.");
+      const ws = XLSX.utils.json_to_sheet(codigosBarra);
       const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, "Stock_Completo");
-      XLSX.writeFile(wb, "Inventario_Completo_Minimarket.xlsx");
+      XLSX.utils.book_append_sheet(wb, ws, "Stock_Lotes");
+      XLSX.writeFile(wb, "Inventario_Lotes_Minimarket.xlsx");
     }
   </script>
 </body>
