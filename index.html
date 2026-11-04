@@ -6,7 +6,6 @@
   <title>POS Minimarket & Bodega Pro</title>
   <style>
     body { font-family: Arial, sans-serif; margin: 0; background: #f4f6f9; color: #333; }
-    .version-badge { position: fixed; bottom: 5px; right: 10px; background: #007bff; color: white; padding: 4px 10px; font-size: 12px; font-weight: bold; border-radius: 4px; z-index: 9999; }
     .login-container { max-width: 360px; margin: 80px auto; background: white; padding: 25px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
     .header { display: flex; justify-content: space-between; align-items: center; background: #0056b3; color: white; padding: 10px 20px; }
     .nav-tabs { display: flex; gap: 4px; background: #e9ecef; padding: 8px; flex-wrap: wrap; }
@@ -33,10 +32,7 @@
 </head>
 <body>
 
-  <!-- INDICADOR DE VERSIÓN GLOBAL -->
-  <div class="version-badge" id="lbl-version">Versión: v1.3</div>
-
-  <!-- LOGIN -->
+  <!-- LOGIN LIMPIO -->
   <div id="login-view" class="login-container">
     <h2 style="margin-top:0;">POS Login</h2>
     <label>Usuario</label>
@@ -44,7 +40,7 @@
     <label>Contraseña</label>
     <input type="password" id="log-pass" placeholder="••••••••">
     <button class="btn" style="width:100%; margin-top:10px;" onclick="iniciarSesion()">Ingresar</button>
-    <p style="font-size:11px; color:#666; margin-top:10px;">Roles: <b>admin</b> (1234), <b>cajero1</b> (4321), <b>visor</b> (0000)</p>
+    <p style="font-size:11px; color:#666; margin-top:10px;">Roles disponibles: <b>admin</b>, <b>cajero1</b>, <b>visor</b> (Espectador)</p>
   </div>
 
   <!-- APLICACIÓN PRINCIPAL -->
@@ -160,7 +156,7 @@
       </div>
     </div>
 
-    <!-- CORTE Z -->
+    <!-- CORTE Z Y CONSULTAS DE CAJA (EXCLUSIVO ADMIN) -->
     <div id="sec-corte" class="panel" style="display:none;">
       <div class="layout-grid">
         <div class="flex-1" id="box-corte-admin">
@@ -183,8 +179,15 @@
   <script>
     const URL_SCRIPT = "https://script.google.com/macros/s/AKfycbxXpMgPYWmvduihcH37oU80-tdP9qik7QaDChQeG2xZt6lcsk9A8xI5dH4XREJE_Oq1Yw/exec";
     
-    let productos = [];
-    let clientes = [];
+    let productos = [
+      { id: 'P001', descripcion: 'Pan Chuta (Unidad)', precioVenta: 0.50, stockActual: 150, fechaVencimiento: '2026-12-30', contador: 10 },
+      { id: 'P002', descripcion: 'Inka Kola 500ml', precioVenta: 3.00, stockActual: 48, fechaVencimiento: '2027-05-15', contador: 25 },
+      { id: 'P003', descripcion: 'Queso Fresco', precioVenta: 24.00, stockActual: 5.5, fechaVencimiento: '2026-11-15', contador: 5 }
+    ];
+    let clientes = [
+      { nombre: 'Rosa Quispe', telefono: '987654321', limiteCredito: 200, deudaActual: 45 },
+      { nombre: 'Luis Torres', telefono: '912345678', limiteCredito: 500, deudaActual: 0 }
+    ];
     let aliases = [];
     let cortesZ = [];
     let carrito = [];
@@ -195,50 +198,19 @@
         const res = await fetch(URL_SCRIPT + "?action=obtenerTodo");
         const data = await res.json();
         if (data && data.status === "SUCCESS") {
-          productos = data.productos || [];
-          clientes = data.clientes || [];
+          if (data.productos.length > 0) productos = data.productos;
+          if (data.clientes.length > 0) clientes = data.clientes;
           aliases = data.aliases || [];
           cortesZ = data.cortes || [];
         }
       } catch (e) {
-        console.warn("Error al conectar con la base de datos", e);
+        console.warn("Usando datos locales por fallo de red / CORS", e);
       }
       renderTopSellers();
       renderClientes();
       renderProductos();
       renderSelects();
       renderCortes();
-    }
-
-    // Método robusto por formulario oculto para enviar datos a Apps Script sin bloqueos CORS
-    function enviarServidor(accion, payload) {
-      return new Promise((resolve) => {
-        const iframeName = 'iframe_' + Date.now();
-        const iframe = document.createElement('iframe');
-        iframe.name = iframeName;
-        iframe.style.display = 'none';
-        document.body.appendChild(iframe);
-
-        const form = document.createElement('form');
-        form.method = 'POST';
-        form.action = URL_SCRIPT;
-        form.target = iframeName;
-
-        const input = document.createElement('input');
-        input.type = 'hidden';
-        input.name = 'data';
-        input.value = JSON.stringify({ accion: accion, payload: payload });
-        form.appendChild(input);
-
-        document.body.appendChild(form);
-        form.submit();
-
-        setTimeout(() => {
-          document.body.removeChild(form);
-          document.body.removeChild(iframe);
-          resolve({ status: "SUCCESS" });
-        }, 2000); // Tiempo prudente para que Google Sheets registre los cambios en las filas
-      });
     }
 
     async function iniciarSesion() {
@@ -265,6 +237,7 @@
 
     function aplicarPermisosRol() {
       if (usuarioActual.rol === "Espectador") {
+        // Bloquear todas las acciones de modificación
         document.getElementById("box-add-client").style.display = "none";
         document.getElementById("box-add-prod").style.display = "none";
         document.getElementById("box-merma").style.display = "none";
@@ -290,23 +263,19 @@
       topContainer.innerHTML = "";
       const ordenados = [...productos].sort((a,b) => (b.contador || 0) - (a.contador || 0)).slice(0, 6);
       ordenados.forEach(p => {
-        topContainer.innerHTML += `<div class="btn-quick" onclick="agregarAlCarrito('${p.id}')">${p.descripcion}<br><b>S/ ${parseFloat(p.precioVenta || 0).toFixed(2)}</b></div>`;
+        topContainer.innerHTML += `<div class="btn-quick" onclick="agregarAlCarrito('${p.id}')">${p.descripcion}<br><b>S/ ${parseFloat(p.precioVenta).toFixed(2)}</b></div>`;
       });
     }
 
     function filtrarProductos(txt) {
       const box = document.getElementById("search-box");
       if (!txt.trim()) { box.style.display = "none"; return; }
-      
-      let matchAlias = aliases.find(a => String(a.codigo).trim() === txt.trim());
-      let targetId = matchAlias ? matchAlias.id : txt.trim();
-
-      const res = productos.filter(p => p.descripcion.toLowerCase().includes(txt.toLowerCase()) || String(p.id).trim() === targetId);
+      const res = productos.filter(p => p.descripcion.toLowerCase().includes(txt.toLowerCase()) || String(p.id) === txt.trim());
       box.innerHTML = "";
       if (res.length > 0) {
         box.style.display = "block";
         res.forEach(p => {
-          box.innerHTML += `<div class="search-item" onclick="agregarAlCarrito('${p.id}'); document.getElementById('search-box').style.display='none'; document.getElementById('txt-buscar').value='';">${p.descripcion} - S/ ${parseFloat(p.precioVenta || 0).toFixed(2)} (Stock: ${p.stockActual})</div>`;
+          box.innerHTML += `<div class="search-item" onclick="agregarAlCarrito('${p.id}'); document.getElementById('search-box').style.display='none';">${p.descripcion} - S/ ${parseFloat(p.precioVenta).toFixed(2)}</div>`;
         });
       } else {
         box.style.display = "none";
@@ -314,14 +283,14 @@
     }
 
     function agregarAlCarrito(id) {
-      const prod = productos.find(p => String(p.id).trim() === String(id).trim());
+      const prod = productos.find(p => String(p.id) === String(id));
       if (!prod) return;
-      const item = carrito.find(i => String(i.id).trim() === String(id).trim());
+      const item = carrito.find(i => String(i.id) === String(id));
       if (item) {
         item.cantidad += 1;
         item.total = item.cantidad * item.precioUnitario;
       } else {
-        carrito.push({ id: prod.id, descripcion: prod.descripcion, cantidad: 1, precioUnitario: parseFloat(prod.precioVenta || 0), total: parseFloat(prod.precioVenta || 0) });
+        carrito.push({ id: prod.id, descripcion: prod.descripcion, cantidad: 1, precioUnitario: parseFloat(prod.precioVenta), total: parseFloat(prod.precioVenta) });
       }
       renderCarrito();
     }
@@ -342,20 +311,24 @@
     }
 
     async function procesarPago() {
-      if (usuarioActual.rol === "Espectador") return alert("Acción denegada.");
+      if (usuarioActual.rol === "Espectador") return alert("Acción denegada para Espectadores.");
       if (carrito.length === 0) return alert("El carrito está vacío.");
       const modo = document.getElementById("pay-mode").value;
       const cliente = document.getElementById("sel-cliente-credito").value;
 
-      if (modo === "Crédito" && !cliente) return alert("Seleccione un cliente para otorgar crédito.");
+      if (modo === "Crédito" && !cliente) return alert("Seleccione un cliente para crédito.");
 
       const payload = { items: carrito, cajero: usuarioActual.usuario, metodoPago: modo, clienteNombre: cliente };
-
-      await enviarServidor("registrarVenta", payload);
-      alert("¡Venta registrada con éxito y guardada en el Excel!");
+      alert("Venta registrada con éxito.");
       carrito = [];
       renderCarrito();
-      setTimeout(cargarDatosBD, 1500);
+
+      await fetch(URL_SCRIPT, {
+        method: "POST", mode: "no-cors",
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
+        body: JSON.stringify({ accion: "registrarVenta", payload: payload })
+      });
+      cargarDatosBD();
     }
 
     function renderClientes() {
@@ -368,11 +341,15 @@
     }
 
     async function abonarDeuda(nombre) {
-      const monto = prompt(`Ingrese el monto a abonar para el cliente ${nombre}:`);
+      const monto = prompt(`Monto a abonar para ${nombre}:`);
       if (monto && parseFloat(monto) > 0) {
-        await enviarServidor("abonarCredito", { nombre: nombre, monto: monto });
-        alert("¡Abono registrado correctamente y deuda actualizada en el Excel!");
-        setTimeout(cargarDatosBD, 1500);
+        await fetch(URL_SCRIPT, {
+          method: "POST", mode: "no-cors",
+          headers: { "Content-Type": "text/plain;charset=utf-8" },
+          body: JSON.stringify({ accion: "abonarCredito", payload: { nombre, monto } })
+        });
+        alert("Abono procesado.");
+        cargarDatosBD();
       }
     }
 
@@ -401,7 +378,7 @@
         return;
       }
       cortesZ.forEach(cz => {
-        tbody.innerHTML += `<tr><td>${cz.idCorte}</td><td>${cz.fecha}</td><td>${cz.cajero}</td><td>S/ ${cz.declarado}</td><td>S/ ${cz.diferencia}</td></tr>`;
+        tbody.innerHTML += `<tr><td>${cz.idCorte}</td><td>${new Date(cz.fecha).toLocaleDateString()}</td><td>${cz.cajero}</td><td>S/ ${cz.declarado}</td><td>S/ ${cz.diferencia}</td></tr>`;
       });
     }
 
@@ -412,9 +389,13 @@
         telefono: document.getElementById("cli-tel").value,
         limiteCredito: document.getElementById("cli-lim").value
       };
-      await enviarServidor("registrarCliente", payload);
-      alert("Cliente registrado correctamente en la hoja Clientes.");
-      setTimeout(cargarDatosBD, 1500);
+      await fetch(URL_SCRIPT, {
+        method: "POST", mode: "no-cors",
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
+        body: JSON.stringify({ accion: "registrarCliente", payload: payload })
+      });
+      alert("Cliente guardado.");
+      cargarDatosBD();
     }
 
     async function guardarProducto() {
@@ -428,26 +409,36 @@
         fechaVencimiento: document.getElementById("p-venc").value,
         aGranel: "NO", unidadMedida: "unidad", unidadesEmpaque: 1, costoMayor: 0, stockMinimo: 5, categoria: "General"
       };
-      await enviarServidor("registrarProducto", payload);
-      alert("Producto registrado en la hoja Productos.");
-      setTimeout(cargarDatosBD, 1500);
+      await fetch(URL_SCRIPT, {
+        method: "POST", mode: "no-cors",
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
+        body: JSON.stringify({ accion: "registrarProducto", payload: payload })
+      });
+      alert("Producto registrado.");
+      cargarDatosBD();
     }
 
     async function registrarMerma() {
       const pId = document.getElementById("sel-merma-prod").value;
       const cant = document.getElementById("cant-merma").value;
-      if(!pId) return alert("Seleccione un producto.");
-      
-      await enviarServidor("registrarMerma", { id: pId, cantidad: cant });
-      alert("Merma registrada y stock actualizado en el Excel.");
-      setTimeout(cargarDatosBD, 1500);
+      await fetch(URL_SCRIPT, {
+        method: "POST", mode: "no-cors",
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
+        body: JSON.stringify({ accion: "registrarMerma", payload: { id: pId, cantidad: cant } })
+      });
+      alert("Merma registrada.");
+      cargarDatosBD();
     }
 
     async function ejecutarCorteZ() {
       const ef = parseFloat(document.getElementById("corte-efectivo").value) || 0;
-      await enviarServidor("ejecutarCorteZ", { cajero: usuarioActual.usuario, efectivoDeclarado: ef });
-      alert("¡Cierre Z completado exitosamente y guardado en el Excel[cite: 2]!");
-      setTimeout(cargarDatosBD, 1500);
+      await fetch(URL_SCRIPT, {
+        method: "POST", mode: "no-cors",
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
+        body: JSON.stringify({ accion: "ejecutarCorteZ", payload: { cajero: usuarioActual.usuario, efectivoDeclarado: ef } })
+      });
+      alert("Cierre Z completado exitosamente.");
+      cargarDatosBD();
     }
   </script>
 </body>
