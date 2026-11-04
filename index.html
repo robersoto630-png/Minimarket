@@ -40,7 +40,7 @@
     <label>Contraseña</label>
     <input type="password" id="log-pass" placeholder="••••••••">
     <button class="btn" style="width:100%; margin-top:10px;" onclick="iniciarSesion()">Ingresar</button>
-    <p style="font-size:11px; color:#666; margin-top:10px;">Claves de prueba: <b>admin</b> (1234), <b>cajero1</b> (4321), <b>visor</b> (0000)</p>
+    <p style="font-size:11px; color:#666; margin-top:10px;">Roles: <b>admin</b> (1234), <b>cajero1</b> (4321), <b>visor</b> (0000)</p>
   </div>
 
   <!-- APLICACIÓN PRINCIPAL -->
@@ -150,7 +150,7 @@
       <div style="max-width:450px;" id="box-merma">
         <label>Buscar Producto para Merma:</label>
         <input type="text" id="txt-buscar-merma" placeholder="Escriba para filtrar..." oninput="filtrarMerma(this.value)">
-        <select id="sel-merma-prod" size="5" style="margin-top:5px; height:120px;"></select>
+        <select id="sel-merma-prod" size="5" style="margin-top:5px; height:120px; width:100%;"></select>
         
         <input type="hidden" id="merma-id-seleccionado">
         <div id="lbl-prod-elegido" style="font-weight:bold; color:#0056b3; margin:5px 0;">Seleccionado: Ninguno</div>
@@ -165,13 +165,13 @@
     <div id="sec-corte" class="panel" style="display:none;">
       <div class="layout-grid">
         <div class="flex-1" id="box-corte-admin">
-          <h4>Ejecutar Corte Z (Cierre de Día)</h4>
+          <h4>Ejecutar Corte Z (Cierre de Día)[cite: 2]</h4>
           <label>Efectivo Físico Contado en Caja S/:</label>
           <input type="number" id="corte-efectivo" placeholder="Ej. 450.00">
           <button class="btn btn-danger" style="width:100%;" onclick="ejecutarCorteZ()">Ejecutar Cierre Z</button>
         </div>
         <div class="flex-2">
-          <h4>Historial de Cierres Z Anteriores</h4>
+          <h4>Historial de Cierres Z Anteriores[cite: 2]</h4>
           <table id="tbl-cortes">
             <thead><tr><th>ID Corte</th><th>Fecha</th><th>Cajero</th><th>Declarado</th><th>Diferencia</th></tr></thead>
             <tbody></tbody>
@@ -182,6 +182,9 @@
   </div>
 
   <script>
+    // PEGA AQUÍ TU URL EXACTA DE GOOGLE APPS SCRIPT QUE TERMINA EN /exec
+    const URL_WEB_APP = "https://script.google.com/macros/s/AKfycbxXpMgPYWmvduihcH37oU80-tdP9qik7QaDChQeG2xZt6lcsk9A8xI5dH4XREJE_Oq1Yw/exec";
+
     let productos = [];
     let clientes = [];
     let aliases = [];
@@ -189,28 +192,42 @@
     let carrito = [];
     let usuarioActual = null;
 
-    function cargarDatosBD() {
-      google.script.run
-        .withSuccessHandler(res => {
-          if (res && res.status === "SUCCESS") {
-            productos = res.productos || [];
-            clientes = res.clientes || [];
-            aliases = res.aliases || [];
-            cortesZ = res.cortes || [];
-            
-            renderTopSellers();
-            renderClientes();
-            renderProductos();
-            renderSelects();
-            renderCortes();
-          } else {
-            alert("Error al leer Excel: " + (res ? res.message : "Desconocido"));
-          }
-        })
-        .withFailureHandler(err => {
-          alert("Error de conexión con Apps Script: " + err.message);
-        })
-        .obtenerTodo();
+    async function cargarDatosBD() {
+      try {
+        const response = await fetch(URL_WEB_APP + "?action=obtenerTodo");
+        const res = await response.json();
+        if (res && res.status === "SUCCESS") {
+          productos = res.productos || [];
+          clientes = res.clientes || [];
+          aliases = res.aliases || [];
+          cortesZ = res.cortes || [];
+          
+          renderTopSellers();
+          renderClientes();
+          renderProductos();
+          renderSelects();
+          renderCortes();
+        } else {
+          alert("Error al leer Excel: " + (res ? res.message : "Desconocido"));
+        }
+      } catch (err) {
+        alert("Error de conexión con Apps Script: " + err.message);
+      }
+    }
+
+    async function enviarServidor(accion, payload) {
+      try {
+        const response = await fetch(URL_WEB_APP, {
+          method: "POST",
+          headers: { "Content-Type": "text/plain;charset=utf-8" },
+          body: JSON.stringify({ accion: accion, payload: payload })
+        });
+        const res = await response.json();
+        return res;
+      } catch (err) {
+        alert("Error al enviar datos al servidor: " + err.message);
+        return { status: "ERROR" };
+      }
     }
 
     function iniciarSesion() {
@@ -313,7 +330,7 @@
       document.getElementById("box-credito").style.display = (val === "Crédito") ? "block" : "none";
     }
 
-    function procesarPago() {
+    async function procesarPago() {
       if (usuarioActual.rol === "Espectador") return alert("Acción denegada.");
       if (carrito.length === 0) return alert("El carrito está vacío.");
       const modo = document.getElementById("pay-mode").value;
@@ -323,16 +340,15 @@
 
       const payload = { items: carrito, cajero: usuarioActual.usuario, metodoPago: modo, clienteNombre: cliente };
 
-      google.script.run.withSuccessHandler(res => {
-        if(res.status === "SUCCESS") {
-          alert("¡Venta registrada con éxito y guardada en el Excel!");
-          carrito = [];
-          renderCarrito();
-          cargarDatosBD();
-        } else {
-          alert("Error al registrar venta: " + res.message);
-        }
-      }).registrarVenta(payload);
+      const res = await enviarServidor("registrarVenta", payload);
+      if (res.status === "SUCCESS") {
+        alert("¡Venta registrada con éxito y guardada en el Excel!");
+        carrito = [];
+        renderCarrito();
+        cargarDatosBD();
+      } else {
+        alert("Error al registrar venta.");
+      }
     }
 
     function renderClientes() {
@@ -344,17 +360,16 @@
       });
     }
 
-    function abonarDeuda(nombre) {
+    async function abonarDeuda(nombre) {
       const monto = prompt(`Ingrese el monto a abonar para el cliente ${nombre}:`);
       if (monto && parseFloat(monto) > 0) {
-        google.script.run.withSuccessHandler(res => {
-          if(res.status === "SUCCESS") {
-            alert("¡Abono registrado correctamente y deuda actualizada en el Excel!");
-            cargarDatosBD();
-          } else {
-            alert("Error al procesar el abono.");
-          }
-        }).abonarCredito({ nombre: nombre, monto: monto });
+        const res = await enviarServidor("abonarCredito", { nombre: nombre, monto: monto });
+        if (res.status === "SUCCESS") {
+          alert("¡Abono registrado correctamente y deuda actualizada en el Excel!");
+          cargarDatosBD();
+        } else {
+          alert("Error al procesar el abono.");
+        }
       }
     }
 
@@ -406,20 +421,21 @@
       });
     }
 
-    function guardarCliente() {
+    async function guardarCliente() {
       const payload = {
         nombre: document.getElementById("cli-nom").value,
         dniRuc: document.getElementById("cli-dni").value,
         telefono: document.getElementById("cli-tel").value,
         limiteCredito: document.getElementById("cli-lim").value
       };
-      google.script.run.withSuccessHandler(res => {
+      const res = await enviarServidor("registrarCliente", payload);
+      if (res.status === "SUCCESS") {
         alert("Cliente registrado correctamente en la hoja Clientes.");
         cargarDatosBD();
-      }).registrarCliente(payload);
+      }
     }
 
-    function guardarProducto() {
+    async function guardarProducto() {
       const payload = {
         id: document.getElementById("p-id").value,
         codigoBarras: document.getElementById("p-barras").value,
@@ -430,29 +446,32 @@
         fechaVencimiento: document.getElementById("p-venc").value,
         aGranel: "NO", unidadMedida: "unidad", unidadesEmpaque: 1, costoMayor: 0, stockMinimo: 5, categoria: "General"
       };
-      google.script.run.withSuccessHandler(res => {
+      const res = await enviarServidor("registrarProducto", payload);
+      if (res.status === "SUCCESS") {
         alert("Producto registrado en la hoja Productos.");
         cargarDatosBD();
-      }).registrarProducto(payload);
+      }
     }
 
-    function registrarMerma() {
+    async function registrarMerma() {
       const pId = document.getElementById("merma-id-seleccionado").value;
       const cant = document.getElementById("cant-merma").value;
       if(!pId) return alert("Seleccione un producto en la lista.");
       
-      google.script.run.withSuccessHandler(res => {
+      const res = await enviarServidor("registrarMerma", { id: pId, cantidad: cant });
+      if (res.status === "SUCCESS") {
         alert("Merma registrada y stock actualizado en el Excel.");
         cargarDatosBD();
-      }).registrarMerma({ id: pId, cantidad: cant });
+      }
     }
 
-    function ejecutarCorteZ() {
+    async function ejecutarCorteZ() {
       const ef = parseFloat(document.getElementById("corte-efectivo").value) || 0;
-      google.script.run.withSuccessHandler(res => {
-        alert("¡Cierre Z completado exitosamente y guardado en el Excel!");
+      const res = await enviarServidor("ejecutarCorteZ", { cajero: usuarioActual.usuario, efectivoDeclarado: ef });
+      if (res.status === "SUCCESS") {
+        alert("¡Cierre Z completado exitosamente y guardado en el Excel[cite: 2]!");
         cargarDatosBD();
-      }).ejecutarCorteZ({ cajero: usuarioActual.usuario, efectivoDeclarado: ef });
+      }
     }
   </script>
 </body>
