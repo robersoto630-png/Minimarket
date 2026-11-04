@@ -6,7 +6,7 @@
   <title>POS Minimarket & Bodega Pro</title>
   <style>
     body { font-family: Arial, sans-serif; margin: 0; background: #f4f6f9; color: #333; }
-    .version-badge { position: fixed; bottom: 5px; right: 10px; background: #28a745; color: white; padding: 4px 10px; font-size: 12px; font-weight: bold; border-radius: 4px; z-index: 9999; }
+    .version-badge { position: fixed; bottom: 5px; right: 10px; background: #007bff; color: white; padding: 4px 10px; font-size: 12px; font-weight: bold; border-radius: 4px; z-index: 9999; }
     .login-container { max-width: 360px; margin: 80px auto; background: white; padding: 25px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
     .header { display: flex; justify-content: space-between; align-items: center; background: #0056b3; color: white; padding: 10px 20px; }
     .nav-tabs { display: flex; gap: 4px; background: #e9ecef; padding: 8px; flex-wrap: wrap; }
@@ -34,13 +34,13 @@
 <body>
 
   <!-- INDICADOR DE VERSIÓN GLOBAL -->
-  <div class="version-badge" id="lbl-version">Versión: v1.2</div>
+  <div class="version-badge" id="lbl-version">Versión: v1.3</div>
 
   <!-- LOGIN -->
   <div id="login-view" class="login-container">
     <h2 style="margin-top:0;">POS Login</h2>
     <label>Usuario</label>
-    <input type="text" id="log-user" placeholder="admin, cajero1 o visor">
+    <input type="text" id="log-user" placeholder="Ingrese usuario...">
     <label>Contraseña</label>
     <input type="password" id="log-pass" placeholder="••••••••">
     <button class="btn" style="width:100%; margin-top:10px;" onclick="iniciarSesion()">Ingresar</button>
@@ -151,17 +151,12 @@
     <!-- F4 INVENTARIO -->
     <div id="sec-inventario" class="panel" style="display:none;">
       <h4>Control de Mermas y Bajas de Stock</h4>
-      <div style="max-width:450px;" id="box-merma">
-        <label>Buscar Producto para Merma:</label>
-        <input type="text" id="txt-buscar-merma" placeholder="Escriba para filtrar..." oninput="filtrarMerma(this.value)">
-        <select id="sel-merma-prod" size="5" style="margin-top:5px; height:120px; width:100%;"></select>
-        
-        <input type="hidden" id="merma-id-seleccionado">
-        <div id="lbl-prod-elegido" style="font-weight:bold; color:#0056b3; margin:5px 0;">Seleccionado: Ninguno</div>
-
+      <div style="max-width:400px;" id="box-merma">
+        <label>Seleccionar Producto:</label>
+        <select id="sel-merma-prod"></select>
         <label>Cantidad a dar de baja:</label>
-        <input type="number" id="cant-merma" value="1" step="0.01">
-        <button class="btn btn-warning" onclick="registrarMerma()">Registrar Merma / Baja</button>
+        <input type="number" id="cant-merma" value="1">
+        <button class="btn btn-warning" onclick="registrarMerma()">Registrar Merma</button>
       </div>
     </div>
 
@@ -186,9 +181,8 @@
   </div>
 
   <script>
-    // PEGA AQUÍ TU URL EXACTA DE GOOGLE APPS SCRIPT QUE TERMINA EN /exec
-    const URL_WEB_APP = "https://script.google.com/macros/s/AKfycbxXpMgPYWmvduihcH37oU80-tdP9qik7QaDChQeG2xZt6lcsk9A8xI5dH4XREJE_Oq1Yw/exec";
-
+    const URL_SCRIPT = "https://script.google.com/macros/s/AKfycbxXpMgPYWmvduihcH37oU80-tdP9qik7QaDChQeG2xZt6lcsk9A8xI5dH4XREJE_Oq1Yw/exec";
+    
     let productos = [];
     let clientes = [];
     let aliases = [];
@@ -196,36 +190,28 @@
     let carrito = [];
     let usuarioActual = null;
 
-    // Conexión mediante JSONP para evitar bloqueos CORS en GitHub Pages
-    function cargarDatosBD() {
-      const scriptAntiguo = document.getElementById("jsonp-script");
-      if (scriptAntiguo) scriptAntiguo.remove();
-
-      const script = document.createElement("script");
-      script.id = "jsonp-script";
-      script.src = `${URL_WEB_APP}?action=obtenerTodo&callback=procesarRespuestaExcel`;
-      document.body.appendChild(script);
-    }
-
-    function procesarRespuestaExcel(res) {
-      if (res && res.status === "SUCCESS") {
-        productos = res.productos || [];
-        clientes = res.clientes || [];
-        aliases = res.aliases || [];
-        cortesZ = res.cortes || [];
-        
-        renderTopSellers();
-        renderClientes();
-        renderProductos();
-        renderSelects();
-        renderCortes();
-        console.log("Datos sincronizados con éxito desde el Excel v1.2");
-      } else {
-        alert("Error al leer Excel: " + (res ? res.message : "Desconocido"));
+    async function cargarDatosBD() {
+      try {
+        const res = await fetch(URL_SCRIPT + "?action=obtenerTodo");
+        const data = await res.json();
+        if (data && data.status === "SUCCESS") {
+          productos = data.productos || [];
+          clientes = data.clientes || [];
+          aliases = data.aliases || [];
+          cortesZ = data.cortes || [];
+        }
+      } catch (e) {
+        console.warn("Error al conectar con la base de datos", e);
       }
+      renderTopSellers();
+      renderClientes();
+      renderProductos();
+      renderSelects();
+      renderCortes();
     }
 
-    async function enviarServidor(accion, payload) {
+    // Método robusto por formulario oculto para enviar datos a Apps Script sin bloqueos CORS
+    function enviarServidor(accion, payload) {
       return new Promise((resolve) => {
         const iframeName = 'iframe_' + Date.now();
         const iframe = document.createElement('iframe');
@@ -235,7 +221,7 @@
 
         const form = document.createElement('form');
         form.method = 'POST';
-        form.action = URL_WEB_APP;
+        form.action = URL_SCRIPT;
         form.target = iframeName;
 
         const input = document.createElement('input');
@@ -251,11 +237,11 @@
           document.body.removeChild(form);
           document.body.removeChild(iframe);
           resolve({ status: "SUCCESS" });
-        }, 1500);
+        }, 2000); // Tiempo prudente para que Google Sheets registre los cambios en las filas
       });
     }
 
-    function iniciarSesion() {
+    async function iniciarSesion() {
       const u = document.getElementById("log-user").value.trim();
       const p = document.getElementById("log-pass").value.trim();
       
@@ -274,7 +260,7 @@
       document.getElementById("user-display").innerText = `${u} (${rol})`;
 
       aplicarPermisosRol();
-      cargarDatosBD();
+      await cargarDatosBD();
     }
 
     function aplicarPermisosRol() {
@@ -400,30 +386,11 @@
 
     function renderSelects() {
       const selCred = document.getElementById("sel-cliente-credito");
-      selCred.innerHTML = "<option value=''>-- Seleccionar --</option>";
-      clientes.forEach(c => selCred.innerHTML += `<option value="${c.nombre}">${c.nombre} (Deuda: S/ ${c.deudaActual})</option>`);
-      
-      llenarSelectMerma(productos);
-    }
-
-    function llenarSelectMerma(lista) {
       const selMer = document.getElementById("sel-merma-prod");
+      selCred.innerHTML = "<option value=''>-- Seleccionar --</option>";
       selMer.innerHTML = "";
-      lista.forEach(p => {
-        selMer.innerHTML += `<option value="${p.id}">${p.descripcion} (Stock: ${p.stockActual})</option>`;
-      });
-      selMer.onchange = function() {
-        const selectedOpt = selMer.options[selMer.selectedIndex];
-        if(selectedOpt) {
-          document.getElementById("merma-id-seleccionado").value = selMer.value;
-          document.getElementById("lbl-prod-elegido").innerText = "Seleccionado: " + selectedOpt.text;
-        }
-      };
-    }
-
-    function filtrarMerma(txt) {
-      const filtrados = productos.filter(p => p.descripcion.toLowerCase().includes(txt.toLowerCase()) || String(p.id).includes(txt));
-      llenarSelectMerma(filtrados);
+      clientes.forEach(c => selCred.innerHTML += `<option value="${c.nombre}">${c.nombre} (Deuda: S/ ${c.deudaActual})</option>`);
+      productos.forEach(p => selMer.innerHTML += `<option value="${p.id}">${p.descripcion} (Stock: ${p.stockActual})</option>`);
     }
 
     function renderCortes() {
@@ -467,9 +434,9 @@
     }
 
     async function registrarMerma() {
-      const pId = document.getElementById("merma-id-seleccionado").value;
+      const pId = document.getElementById("sel-merma-prod").value;
       const cant = document.getElementById("cant-merma").value;
-      if(!pId) return alert("Seleccione un producto en la lista.");
+      if(!pId) return alert("Seleccione un producto.");
       
       await enviarServidor("registrarMerma", { id: pId, cantidad: cant });
       alert("Merma registrada y stock actualizado en el Excel.");
@@ -479,7 +446,7 @@
     async function ejecutarCorteZ() {
       const ef = parseFloat(document.getElementById("corte-efectivo").value) || 0;
       await enviarServidor("ejecutarCorteZ", { cajero: usuarioActual.usuario, efectivoDeclarado: ef });
-      alert("¡Cierre Z completado exitosamente y guardado en el Excel![cite: 2]");
+      alert("¡Cierre Z completado exitosamente y guardado en el Excel[cite: 2]!");
       setTimeout(cargarDatosBD, 1500);
     }
   </script>
