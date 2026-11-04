@@ -41,7 +41,7 @@
 </head>
 <body>
 
-  <div class="version-badge">Versión: v3.8</div>
+  <div class="version-badge">Versión: v3.9</div>
 
   <!-- LOGIN -->
   <div id="login-view" class="login-container">
@@ -216,7 +216,7 @@
           <label>Stock Actual (Lote):</label>
           <input type="number" id="p-stock" value="10">
 
-          <label>Fecha de Vencimiento (dd/mm/yyyy):</label>
+          <label>Fecha de Vencimiento (yyyy-mm-dd):</label>
           <input type="date" id="p-venc">
 
           <button class="btn" onclick="guardarProducto()">Guardar Producto / Lote</button>
@@ -521,7 +521,7 @@
       if (res.length > 0) {
         box.style.display = "block";
         res.forEach(cb => {
-          let vencTxt = cb.fechaVencimiento ? cb.fechaVencimiento : "N/A";
+          let vencTxt = cb.fechaVencimiento ? cb.fechaVencimiento : "Sin Vencimiento";
           box.innerHTML += `<div class="search-item" onclick="agregarItemCarritoFinal('${cb.id}', '${cb.fechaVencimiento}'); document.getElementById('search-box').style.display='none'; document.getElementById('txt-buscar').value='';" title="Haga clic para agregar lote">${cb.descripcion} | Venc: ${vencTxt} | Stock: ${cb.stockActual} (S/ ${cb.precioVenta})</div>`;
         });
       } else {
@@ -529,7 +529,6 @@
       }
     }
 
-    // MODIFICADO: Muestra siempre la fecha de vencimiento limpia en el cuadro emergente de múltiples lotes
     function agregarAlCarrito(idProd) {
       const lotes = codigosBarra.filter(cb => cb.id === idProd && cb.stockActual > 0);
       if (lotes.length === 0) return alert("Producto sin stock disponible.");
@@ -537,9 +536,9 @@
       if (lotes.length === 1) {
         agregarItemCarritoFinal(lotes[0].id, lotes[0].fechaVencimiento);
       } else {
-        let opciones = "Seleccione el lote (dd/mm/yyyy):\n";
+        let opciones = "Seleccione el lote (yyyy-mm-dd):\n";
         lotes.forEach((l, idx) => {
-          let vencTxt = l.fechaVencimiento ? l.fechaVencimiento : 'N/A';
+          let vencTxt = l.fechaVencimiento ? l.fechaVencimiento : 'Sin Vencimiento';
           opciones += `${idx + 1}. Venc: ${vencTxt} - Stock: ${l.stockActual}\n`;
         });
         let eleccion = prompt(opciones, "1");
@@ -747,12 +746,11 @@
       llenarSelectMerma(codigosBarra);
     }
 
-    // MODIFICADO: Llena el select de la pestaña Inventario con la fecha exacta en dd/mm/yyyy
     function llenarSelectMerma(lista) {
       const selMer = document.getElementById("sel-merma-prod");
       selMer.innerHTML = "";
       lista.forEach(cb => {
-        let vencTxt = cb.fechaVencimiento ? cb.fechaVencimiento : "N/A";
+        let vencTxt = cb.fechaVencimiento ? cb.fechaVencimiento : "Sin Vencimiento";
         selMer.innerHTML += `<option value="${cb.id}|${vencTxt}">${cb.descripcion} (Venc: ${vencTxt} - Stock: ${cb.stockActual})</option>`;
       });
       selMer.onchange = function() {
@@ -795,15 +793,6 @@
     async function guardarProducto() {
       const esExistente = document.getElementById("chk-id-existente").checked;
       
-      let fechaInput = document.getElementById("p-venc").value;
-      let fechaVencFormateada = "";
-      if (fechaInput) {
-        let partes = fechaInput.split("-");
-        if (partes.length === 3) {
-          fechaVencFormateada = `${partes[2]}/${partes[1]}/${partes[0]}`;
-        }
-      }
-
       const payload = {
         id: document.getElementById("p-id").value,
         codigoBarras: document.getElementById("p-barras").value,
@@ -817,7 +806,7 @@
         precioMayor: esExistente ? 0 : document.getElementById("p-preciomayor").value,
         stockMinimo: esExistente ? 5 : document.getElementById("p-minimo").value,
         categoria: esExistente ? "General" : document.getElementById("p-cat").value,
-        fechaVencimiento: fechaVencFormateada,
+        fechaVencimiento: document.getElementById("p-venc").value, // Manda directo en formato YYYY-MM-DD
         stockActual: document.getElementById("p-stock").value
       };
       await enviarServidor("registrarProducto", payload);
@@ -858,7 +847,7 @@
         "stockMinimo": 5,
         "stockActual": 50,
         "categoria": "Abarrotes",
-        "fechaVencimiento": "31/10/2026"
+        "fechaVencimiento": "2026-10-31"
       }];
       const ws = XLSX.utils.json_to_sheet(plantilla);
       const wb = XLSX.utils.book_new();
@@ -868,7 +857,7 @@
 
     function procesarExcelMasivo() {
       const fileInput = document.getElementById("file-excel");
-      if (!fileInput.files.length) return alert("Seleccione un archivo Excel.");
+      if (!fileInput.files.length) return alert("No hay archivo seleccionado.");
       
       const reader = new FileReader();
       reader.onload = async function(e) {
@@ -887,7 +876,6 @@
       reader.readAsArrayBuffer(fileInput.files[0]);
     }
 
-    // MODIFICADO: Exporta las fechas exactamente como están guardadas (dd/mm/yyyy)
     function descargarExcelProductos() {
       if (codigosBarra.length === 0) return alert("No hay datos.");
       let datosLimpios = codigosBarra.map(cb => ({
@@ -895,7 +883,7 @@
         "Codigo_Barras": cb.codigoBarras,
         "Descripcion": cb.descripcion,
         "Precio_Venta": cb.precioVenta,
-        "Fecha_Vencimiento": cb.fechaVencimiento || 'N/A',
+        "Fecha_Vencimiento": cb.fechaVencimiento || 'Sin Vencimiento',
         "Stock_Actual": cb.stockActual
       }));
       const ws = XLSX.utils.json_to_sheet(datosLimpios);
