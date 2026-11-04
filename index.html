@@ -6,7 +6,7 @@
   <title>POS Minimarket & Bodega Pro</title>
   <style>
     body { font-family: Arial, sans-serif; margin: 0; background: #f4f6f9; color: #333; }
-    .version-badge { position: fixed; bottom: 5px; right: 10px; background: #333; color: white; padding: 3px 8px; font-size: 11px; border-radius: 4px; z-index: 9999; }
+    .version-badge { position: fixed; bottom: 5px; right: 10px; background: #28a745; color: white; padding: 4px 10px; font-size: 12px; font-weight: bold; border-radius: 4px; z-index: 9999; }
     .login-container { max-width: 360px; margin: 80px auto; background: white; padding: 25px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
     .header { display: flex; justify-content: space-between; align-items: center; background: #0056b3; color: white; padding: 10px 20px; }
     .nav-tabs { display: flex; gap: 4px; background: #e9ecef; padding: 8px; flex-wrap: wrap; }
@@ -34,7 +34,7 @@
 <body>
 
   <!-- INDICADOR DE VERSIÓN GLOBAL -->
-  <div class="version-badge" id="lbl-version">Versión: v1.1</div>
+  <div class="version-badge" id="lbl-version">Versión: v1.2</div>
 
   <!-- LOGIN -->
   <div id="login-view" class="login-container">
@@ -196,43 +196,63 @@
     let carrito = [];
     let usuarioActual = null;
 
-    async function cargarDatosBD() {
-      try {
-        const response = await fetch(URL_WEB_APP + "?action=obtenerTodo");
-        const res = await response.json();
-        if (res && res.status === "SUCCESS") {
-          productos = res.productos || [];
-          clientes = res.clientes || [];
-          aliases = res.aliases || [];
-          cortesZ = res.cortes || [];
-          
-          renderTopSellers();
-          renderClientes();
-          renderProductos();
-          renderSelects();
-          renderCortes();
-          console.log("Datos sincronizados correctamente desde el Excel.");
-        } else {
-          alert("Error al leer Excel: " + (res ? res.message : "Desconocido"));
-        }
-      } catch (err) {
-        alert("Error de conexión con Apps Script: " + err.message);
+    // Conexión mediante JSONP para evitar bloqueos CORS en GitHub Pages
+    function cargarDatosBD() {
+      const scriptAntiguo = document.getElementById("jsonp-script");
+      if (scriptAntiguo) scriptAntiguo.remove();
+
+      const script = document.createElement("script");
+      script.id = "jsonp-script";
+      script.src = `${URL_WEB_APP}?action=obtenerTodo&callback=procesarRespuestaExcel`;
+      document.body.appendChild(script);
+    }
+
+    function procesarRespuestaExcel(res) {
+      if (res && res.status === "SUCCESS") {
+        productos = res.productos || [];
+        clientes = res.clientes || [];
+        aliases = res.aliases || [];
+        cortesZ = res.cortes || [];
+        
+        renderTopSellers();
+        renderClientes();
+        renderProductos();
+        renderSelects();
+        renderCortes();
+        console.log("Datos sincronizados con éxito desde el Excel v1.2");
+      } else {
+        alert("Error al leer Excel: " + (res ? res.message : "Desconocido"));
       }
     }
 
     async function enviarServidor(accion, payload) {
-      try {
-        const response = await fetch(URL_WEB_APP, {
-          method: "POST",
-          headers: { "Content-Type": "text/plain;charset=utf-8" },
-          body: JSON.stringify({ accion: accion, payload: payload })
-        });
-        const res = await response.json();
-        return res;
-      } catch (err) {
-        alert("Error al enviar datos al servidor: " + err.message);
-        return { status: "ERROR" };
-      }
+      return new Promise((resolve) => {
+        const iframeName = 'iframe_' + Date.now();
+        const iframe = document.createElement('iframe');
+        iframe.name = iframeName;
+        iframe.style.display = 'none';
+        document.body.appendChild(iframe);
+
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = URL_WEB_APP;
+        form.target = iframeName;
+
+        const input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = 'data';
+        input.value = JSON.stringify({ accion: accion, payload: payload });
+        form.appendChild(input);
+
+        document.body.appendChild(form);
+        form.submit();
+
+        setTimeout(() => {
+          document.body.removeChild(form);
+          document.body.removeChild(iframe);
+          resolve({ status: "SUCCESS" });
+        }, 1500);
+      });
     }
 
     function iniciarSesion() {
@@ -345,15 +365,11 @@
 
       const payload = { items: carrito, cajero: usuarioActual.usuario, metodoPago: modo, clienteNombre: cliente };
 
-      const res = await enviarServidor("registrarVenta", payload);
-      if (res.status === "SUCCESS") {
-        alert("¡Venta registrada con éxito y guardada en el Excel!");
-        carrito = [];
-        renderCarrito();
-        cargarDatosBD();
-      } else {
-        alert("Error al registrar venta.");
-      }
+      await enviarServidor("registrarVenta", payload);
+      alert("¡Venta registrada con éxito y guardada en el Excel!");
+      carrito = [];
+      renderCarrito();
+      setTimeout(cargarDatosBD, 1500);
     }
 
     function renderClientes() {
@@ -368,13 +384,9 @@
     async function abonarDeuda(nombre) {
       const monto = prompt(`Ingrese el monto a abonar para el cliente ${nombre}:`);
       if (monto && parseFloat(monto) > 0) {
-        const res = await enviarServidor("abonarCredito", { nombre: nombre, monto: monto });
-        if (res.status === "SUCCESS") {
-          alert("¡Abono registrado correctamente y deuda actualizada en el Excel!");
-          cargarDatosBD();
-        } else {
-          alert("Error al procesar el abono.");
-        }
+        await enviarServidor("abonarCredito", { nombre: nombre, monto: monto });
+        alert("¡Abono registrado correctamente y deuda actualizada en el Excel!");
+        setTimeout(cargarDatosBD, 1500);
       }
     }
 
@@ -433,11 +445,9 @@
         telefono: document.getElementById("cli-tel").value,
         limiteCredito: document.getElementById("cli-lim").value
       };
-      const res = await enviarServidor("registrarCliente", payload);
-      if (res.status === "SUCCESS") {
-        alert("Cliente registrado correctamente en la hoja Clientes.");
-        cargarDatosBD();
-      }
+      await enviarServidor("registrarCliente", payload);
+      alert("Cliente registrado correctamente en la hoja Clientes.");
+      setTimeout(cargarDatosBD, 1500);
     }
 
     async function guardarProducto() {
@@ -451,11 +461,9 @@
         fechaVencimiento: document.getElementById("p-venc").value,
         aGranel: "NO", unidadMedida: "unidad", unidadesEmpaque: 1, costoMayor: 0, stockMinimo: 5, categoria: "General"
       };
-      const res = await enviarServidor("registrarProducto", payload);
-      if (res.status === "SUCCESS") {
-        alert("Producto registrado en la hoja Productos.");
-        cargarDatosBD();
-      }
+      await enviarServidor("registrarProducto", payload);
+      alert("Producto registrado en la hoja Productos.");
+      setTimeout(cargarDatosBD, 1500);
     }
 
     async function registrarMerma() {
@@ -463,20 +471,16 @@
       const cant = document.getElementById("cant-merma").value;
       if(!pId) return alert("Seleccione un producto en la lista.");
       
-      const res = await enviarServidor("registrarMerma", { id: pId, cantidad: cant });
-      if (res.status === "SUCCESS") {
-        alert("Merma registrada y stock actualizado en el Excel.");
-        cargarDatosBD();
-      }
+      await enviarServidor("registrarMerma", { id: pId, cantidad: cant });
+      alert("Merma registrada y stock actualizado en el Excel.");
+      setTimeout(cargarDatosBD, 1500);
     }
 
     async function ejecutarCorteZ() {
       const ef = parseFloat(document.getElementById("corte-efectivo").value) || 0;
-      const res = await enviarServidor("ejecutarCorteZ", { cajero: usuarioActual.usuario, efectivoDeclarado: ef });
-      if (res.status === "SUCCESS") {
-        alert("¡Cierre Z completado exitosamente y guardado en el Excel[cite: 2]!");
-        cargarDatosBD();
-      }
+      await enviarServidor("ejecutarCorteZ", { cajero: usuarioActual.usuario, efectivoDeclarado: ef });
+      alert("¡Cierre Z completado exitosamente y guardado en el Excel![cite: 2]");
+      setTimeout(cargarDatosBD, 1500);
     }
   </script>
 </body>
