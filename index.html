@@ -6,7 +6,7 @@
   <title>POS Minimarket & Bodega Pro</title>
   <style>
     body { font-family: Arial, sans-serif; margin: 0; background: #f4f6f9; color: #333; }
-    .version-badge { position: fixed; bottom: 5px; right: 10px; background: #dc3545; color: white; padding: 4px 10px; font-size: 11px; font-weight: bold; border-radius: 4px; z-index: 9999; }
+    .version-badge { position: fixed; bottom: 5px; right: 10px; background: #28a745; color: white; padding: 4px 10px; font-size: 11px; font-weight: bold; border-radius: 4px; z-index: 9999; }
     .login-container { max-width: 360px; margin: 80px auto; background: white; padding: 25px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
     .header { display: flex; justify-content: space-between; align-items: center; background: #0056b3; color: white; padding: 10px 20px; }
     .nav-tabs { display: flex; gap: 4px; background: #e9ecef; padding: 8px; flex-wrap: wrap; }
@@ -33,7 +33,7 @@
 </head>
 <body>
 
-  <div class="version-badge">Versión: v1.6 (Híbrida)</div>
+  <div class="version-badge">Versión: v1.7 (Definitiva)</div>
 
   <!-- LOGIN -->
   <div id="login-view" class="login-container">
@@ -182,7 +182,7 @@
   <script>
     const URL_SCRIPT = "https://script.google.com/macros/s/AKfycbxXpMgPYWmvduihcH37oU80-tdP9qik7QaDChQeG2xZt6lcsk9A8xI5dH4XREJE_Oq1Yw/exec";
     
-    // Datos iniciales de respaldo para asegurar que las tablas nunca queden en blanco
+    // Base de datos local por defecto para garantizar visualización inmediata
     let productos = [
       { id: 'P001', descripcion: 'Pan Chuta (Unidad)', precioVenta: 0.50, stockActual: 150, fechaVencimiento: '2026-12-30', contador: 10 },
       { id: 'P002', descripcion: 'Inka Kola 500ml', precioVenta: 3.00, stockActual: 48, fechaVencimiento: '2027-05-15', contador: 25 },
@@ -198,6 +198,9 @@
     let usuarioActual = null;
 
     async function cargarDatosBD() {
+      // Pintar de inmediato lo que hay en memoria para que la interfaz nunca esté vacía
+      renderizarTodo();
+
       try {
         const res = await fetch(URL_SCRIPT + "?action=obtenerTodo");
         const data = await res.json();
@@ -206,11 +209,11 @@
           if (data.clientes && data.clientes.length > 0) clientes = data.clientes;
           aliases = data.aliases || [];
           cortesZ = data.cortes || [];
+          renderizarTodo(); // Volver a pintar con datos actualizados de Google Sheets
         }
       } catch (e) {
         console.warn("Usando datos locales por restricciones de red/CORS", e);
       }
-      renderizarTodo();
     }
 
     function renderizarTodo() {
@@ -297,6 +300,7 @@
 
     function renderTopSellers() {
       const topContainer = document.getElementById("top-products");
+      if (!topContainer) return;
       topContainer.innerHTML = "";
       const ordenados = [...productos].sort((a,b) => (b.contador || 0) - (a.contador || 0)).slice(0, 6);
       ordenados.forEach(p => {
@@ -306,12 +310,13 @@
 
     function filtrarProductos(txt) {
       const box = document.getElementById("search-box");
-      if (!txt.trim()) { box.style.display = "none"; return; }
+      if (!txt || !txt.trim()) { box.style.display = "none"; return; }
       
-      let matchAlias = aliases.find(a => String(a.codigo).trim() === txt.trim());
-      let targetId = matchAlias ? matchAlias.id : txt.trim();
+      const query = txt.toLowerCase().trim();
+      let matchAlias = aliases.find(a => String(a.codigo).trim() === query);
+      let targetId = matchAlias ? matchAlias.id : query;
 
-      const res = productos.filter(p => p.descripcion.toLowerCase().includes(txt.toLowerCase()) || String(p.id).trim() === targetId);
+      const res = productos.filter(p => p.descripcion.toLowerCase().includes(query) || String(p.id).trim() === targetId);
       box.innerHTML = "";
       if (res.length > 0) {
         box.style.display = "block";
@@ -338,6 +343,7 @@
 
     function renderCarrito() {
       const tbody = document.querySelector("#tbl-cart tbody");
+      if (!tbody) return;
       tbody.innerHTML = "";
       let total = 0;
       carrito.forEach((item, idx) => {
@@ -370,6 +376,7 @@
 
     function renderClientes() {
       const tbody = document.querySelector("#tbl-clientes tbody");
+      if (!tbody) return;
       tbody.innerHTML = "";
       clientes.forEach(c => {
         let btnAbonar = usuarioActual.rol !== "Espectador" ? `<button class="btn btn-info" onclick="abonarDeuda('${c.nombre}')">Abonar</button>` : '-';
@@ -388,6 +395,7 @@
 
     function renderProductos() {
       const tbody = document.querySelector("#tbl-productos tbody");
+      if (!tbody) return;
       tbody.innerHTML = "";
       productos.forEach(p => {
         tbody.innerHTML += `<tr><td>${p.id}</td><td>${p.descripcion}</td><td>S/ ${p.precioVenta}</td><td>${p.stockActual}</td><td>${p.fechaVencimiento || '-'}</td></tr>`;
@@ -397,14 +405,19 @@
     function renderSelects() {
       const selCred = document.getElementById("sel-cliente-credito");
       const selMer = document.getElementById("sel-merma-prod");
-      selCred.innerHTML = "<option value=''>-- Seleccionar --</option>";
-      selMer.innerHTML = "";
-      clientes.forEach(c => selCred.innerHTML += `<option value="${c.nombre}">${c.nombre} (Deuda: S/ ${c.deudaActual})</option>`);
-      productos.forEach(p => selMer.innerHTML += `<option value="${p.id}">${p.descripcion} (Stock: ${p.stockActual})</option>`);
+      if (selCred) {
+        selCred.innerHTML = "<option value=''>-- Seleccionar --</option>";
+        clientes.forEach(c => selCred.innerHTML += `<option value="${c.nombre}">${c.nombre} (Deuda: S/ ${c.deudaActual})</option>`);
+      }
+      if (selMer) {
+        selMer.innerHTML = "";
+        productos.forEach(p => selMer.innerHTML += `<option value="${p.id}">${p.descripcion} (Stock: ${p.stockActual})</option>`);
+      }
     }
 
     function renderCortes() {
       const tbody = document.querySelector("#tbl-cortes tbody");
+      if (!tbody) return;
       tbody.innerHTML = "";
       if (cortesZ.length === 0) {
         tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;">No hay cierres previos registrados.</td></tr>`;
