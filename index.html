@@ -4,11 +4,10 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>POS Minimarket & Bodega Pro</title>
-  <!-- Librería para exportación a Excel en 1 clic -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
   <style>
     body { font-family: Arial, sans-serif; margin: 0; background: #f4f6f9; color: #333; }
-    .version-badge { position: fixed; bottom: 5px; right: 10px; background: #28a745; color: white; padding: 4px 10px; font-size: 11px; font-weight: bold; border-radius: 4px; z-index: 9999; }
+    .version-badge { position: fixed; bottom: 5px; right: 10px; background: #007bff; color: white; padding: 4px 10px; font-size: 11px; font-weight: bold; border-radius: 4px; z-index: 9999; }
     .login-container { max-width: 360px; margin: 80px auto; background: white; padding: 25px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
     .header { display: flex; justify-content: space-between; align-items: center; background: #0056b3; color: white; padding: 10px 20px; }
     .nav-tabs { display: flex; gap: 4px; background: #e9ecef; padding: 8px; flex-wrap: wrap; }
@@ -23,7 +22,7 @@
     .btn-danger { background: #dc3545; }
     .btn-info { background: #17a2b8; }
     .btn-warning { background: #ffc107; color: black; }
-    .btn-excel { background: #1D6F42; color: white; margin-left: 10px; }
+    .btn-excel { background: #1D6F42; color: white; }
     .search-results { position: absolute; background: white; border: 1px solid #ccc; width: calc(100% - 20px); max-height: 200px; overflow-y: auto; z-index: 10; display: none; }
     .search-item { padding: 8px; cursor: pointer; border-bottom: 1px solid #eee; }
     .search-item:hover { background: #007bff; color: white; }
@@ -36,7 +35,7 @@
 </head>
 <body>
 
-  <div class="version-badge">Versión: v2.0 (Corregida)</div>
+  <div class="version-badge">Versión: v2.1</div>
 
   <!-- LOGIN -->
   <div id="login-view" class="login-container">
@@ -131,19 +130,48 @@
       <div class="layout-grid">
         <div class="flex-1" id="box-add-prod">
           <h4>Nuevo Producto</h4>
-          <input type="text" id="p-id" placeholder="ID / Código (ej. P004)">
-          <input type="text" id="p-barras" placeholder="Código de Barras (Alias)">
-          <input type="text" id="p-desc" placeholder="Descripción">
-          <input type="number" id="p-costo" placeholder="Costo Unidad S/">
-          <input type="number" id="p-precio" placeholder="Precio Venta S/">
-          <input type="number" id="p-stock" placeholder="Stock Inicial">
+          
+          <div style="background:#e9ecef; padding:8px; border-radius:4px; margin-bottom:8px;">
+            <label style="font-size:12px; cursor:pointer;">
+              <input type="checkbox" id="chk-id-manual" onchange="toggleIdManual(this.checked)" style="width:auto;"> Ingresar ID Manualmente (Mismo producto / Otro código)
+            </label>
+          </div>
+
+          <label>ID del Producto:</label>
+          <input type="text" id="p-id" readonly style="background:#e9ecef;" placeholder="Autogenerado...">
+          
+          <label>Código de Barras (Alias):</label>
+          <input type="text" id="p-barras" placeholder="Ej. 7750123456789">
+
+          <label>Descripción:</label>
+          <input type="text" id="p-desc" placeholder="Nombre del producto">
+
+          <label>Costo Unidad S/:</label>
+          <input type="number" id="p-costo" step="0.01" placeholder="0.00">
+
+          <label>Precio Venta S/:</label>
+          <input type="number" id="p-precio" step="0.01" placeholder="0.00">
+
+          <label>Stock Inicial:</label>
+          <input type="number" id="p-stock" value="10">
+
+          <label>Fecha de Vencimiento:</label>
           <input type="date" id="p-venc">
+
           <button class="btn" onclick="guardarProducto()">Guardar Producto</button>
+
+          <hr style="margin:15px 0;">
+          <h4>Carga Masiva de Productos</h4>
+          <button class="btn btn-excel" style="width:100%; margin-bottom:5px;" onclick="descargarPlantillaExcel()">1. Descargar Plantilla Modelo</button>
+          <label style="font-size:12px;">Subir Excel Completo:</label>
+          <input type="file" id="file-excel" accept=".xlsx, .xls" style="margin-bottom:5px;">
+          <button class="btn btn-warning" style="width:100%; color:black;" onclick="procesarExcelMasivo()">2. Subir y Registrar Masivo</button>
         </div>
+
         <div class="flex-2">
           <div style="display:flex; justify-content:space-between; align-items:center;">
             <h4>Catálogo Registrado (Top 100 con Mayor Stock)</h4>
-            <button class="btn btn-excel" onclick="descargarExcelProductos()"> Descargar Stock Completo (.xlsx)</button>
+            <button class="btn btn-excel" onclick="descargarExcelProductos()">Descargar Stock Completo (.xlsx)</button>
           </div>
           <table id="tbl-productos">
             <thead><tr><th>ID</th><th>Descripción</th><th>Precio</th><th>Stock</th><th>Vencimiento</th></tr></thead>
@@ -174,13 +202,13 @@
     <div id="sec-corte" class="panel" style="display:none;">
       <div class="layout-grid">
         <div class="flex-1" id="box-corte-admin">
-          <h4>Ejecutar Corte Z (Cierre de Día)</h4>
+          <h4>Ejecutar Corte Z (Cierre de Día)[cite: 2]</h4>
           <label>Efectivo Físico Contado en Caja S/:</label>
           <input type="number" id="corte-efectivo" placeholder="Ej. 450.00">
           <button class="btn btn-danger" style="width:100%;" onclick="ejecutarCorteZ()">Ejecutar Cierre Z</button>
         </div>
         <div class="flex-2">
-          <h4>Historial de Cierres Z Anteriores</h4>
+          <h4>Historial de Cierres Z Anteriores[cite: 2]</h4>
           <table id="tbl-cortes">
             <thead><tr><th>ID Corte</th><th>Fecha</th><th>Cajero</th><th>Declarado</th><th>Diferencia</th></tr></thead>
             <tbody></tbody>
@@ -193,8 +221,8 @@
   <script>
     const URL_SCRIPT = "https://script.google.com/macros/s/AKfycbxXpMgPYWmvduihcH37oU80-tdP9qik7QaDChQeG2xZt6lcsk9A8xI5dH4XREJE_Oq1Yw/exec";
     
-    let productos = [];        // Top 100 para la tabla
-    let todosProductos = [];   // Todos para la búsqueda global y descarga Excel
+    let productos = [];
+    let todosProductos = [];
     let clientes = [];
     let aliases = [];
     let cortesZ = [];
@@ -211,11 +239,42 @@
           clientes = data.clientes || [];
           aliases = data.aliases || [];
           cortesZ = data.cortes || [];
+          generarIdAutomatico();
         }
       } catch (e) {
         console.warn("Error al cargar datos", e);
       }
       renderizarTodo();
+    }
+
+    // Generar ID secuencial automático (Ej. P001, P002...)
+    function generarIdAutomatico() {
+      if (!document.getElementById("chk-id-manual").checked) {
+        let maxNum = 0;
+        todosProductos.forEach(p => {
+          let match = p.id.match(/^P(\d+)$/i);
+          if (match) {
+            let num = parseInt(match[1], 10);
+            if (num > maxNum) maxNum = num;
+          }
+        });
+        let siguienteId = "P" + String(maxNum + 1).padStart(3, '0');
+        document.getElementById("p-id").value = siguienteId;
+      }
+    }
+
+    function toggleIdManual(esManual) {
+      const inputId = document.getElementById("p-id");
+      if (esManual) {
+        inputId.removeAttribute("readonly");
+        inputId.style.background = "white";
+        inputId.value = "";
+        inputId.placeholder = "Ingrese ID personalizado...";
+      } else {
+        inputId.setAttribute("readonly", true);
+        inputId.style.background = "#e9ecef";
+        generarIdAutomatico();
+      }
     }
 
     function renderizarTodo() {
@@ -280,6 +339,7 @@
       btn.classList.add('active');
     }
 
+    // Renderizar Top Sellers basados en la columna contador del Excel
     function renderTopSellers() {
       const topContainer = document.getElementById("top-products");
       topContainer.innerHTML = "";
@@ -289,16 +349,15 @@
       });
     }
 
-    // BUSCADOR EN TIEMPO REAL SOBRE EL 100% DE PRODUCTOS
     function filtrarProductos(txt) {
       const box = document.getElementById("search-box");
       if (!txt || !txt.trim()) { box.style.display = "none"; return; }
       
       const query = txt.toLowerCase().trim();
-      let matchAlias = aliases.find(a => String(a.codigo).trim() === query);
+      let matchAlias = aliases.find(a => String(a.codigo).toLowerCase().trim() === query);
       let targetId = matchAlias ? matchAlias.id : query;
 
-      const res = todosProductos.filter(p => p.descripcion.toLowerCase().includes(query) || String(p.id).trim() === targetId);
+      const res = todosProductos.filter(p => p.descripcion.toLowerCase().includes(query) || String(p.id).toLowerCase().trim() === targetId);
       box.innerHTML = "";
       if (res.length > 0) {
         box.style.display = "block";
@@ -349,10 +408,10 @@
       const payload = { items: carrito, cajero: usuarioActual.usuario, metodoPago: modo, clienteNombre: cliente };
 
       await enviarServidor("registrarVenta", payload);
-      alert("¡Venta registrada con éxito en el Excel!");
+      alert("¡Venta registrada con éxito y contadores de productos actualizados en el Excel!");
       carrito = [];
       renderCarrito();
-      setTimeout(cargarDatosBD, 1200);
+      setTimeout(cargarDatosBD, 1500);
     }
 
     function renderClientes() {
@@ -365,11 +424,11 @@
     }
 
     async function abonarDeuda(nombre) {
-      const monto = prompt(`Ingrese el monto a abonar para ${nombre}:`);
+      const monto = prompt(`Ingrese el monto a abonar para el cliente ${nombre}:`);
       if (monto && parseFloat(monto) > 0) {
         await enviarServidor("abonarCredito", { nombre: nombre, monto: monto });
-        alert("¡Abono procesado y deuda restada en el Excel!");
-        setTimeout(cargarDatosBD, 1200);
+        alert("¡Abono procesado, deuda restada y registro guardado en la pestaña Creditos!");
+        setTimeout(cargarDatosBD, 1500);
       }
     }
 
@@ -389,7 +448,6 @@
       llenarSelectMerma(todosProductos);
     }
 
-    // BUSCADOR EN LA PESTAÑA INVENTARIO
     function llenarSelectMerma(lista) {
       const selMer = document.getElementById("sel-merma-prod");
       selMer.innerHTML = "";
@@ -431,7 +489,7 @@
       };
       await enviarServidor("registrarCliente", payload);
       alert("¡Cliente guardado en el Excel!");
-      setTimeout(cargarDatosBD, 1200);
+      setTimeout(cargarDatosBD, 1500);
     }
 
     async function guardarProducto() {
@@ -445,8 +503,8 @@
         fechaVencimiento: document.getElementById("p-venc").value
       };
       await enviarServidor("registrarProducto", payload);
-      alert("¡Producto registrado en el Excel!");
-      setTimeout(cargarDatosBD, 1200);
+      alert("¡Producto registrado y alias de barras guardado en el Excel!");
+      setTimeout(cargarDatosBD, 1500);
     }
 
     async function registrarMerma() {
@@ -456,17 +514,57 @@
       
       await enviarServidor("registrarMerma", { id: pId, cantidad: cant });
       alert("¡Merma registrada y stock descontado en el Excel!");
-      setTimeout(cargarDatosBD, 1200);
+      setTimeout(cargarDatosBD, 1500);
     }
 
     async function ejecutarCorteZ() {
       const ef = parseFloat(document.getElementById("corte-efectivo").value) || 0;
       await enviarServidor("ejecutarCorteZ", { cajero: usuarioActual.usuario, efectivoDeclarado: ef });
-      alert("¡Cierre Z completado y guardado en la hoja CorteCaja!");
-      setTimeout(cargarDatosBD, 1200);
+      alert("¡Cierre Z completado exitosamente y registrado en la hoja CorteCaja[cite: 2]!");
+      setTimeout(cargarDatosBD, 1500);
     }
 
-    // BOTÓN DE DESCARGA COMPLETA A EXCEL
+    // Funciones de Excel (Plantilla, Importación y Exportación)
+    function descargarPlantillaExcel() {
+      const plantilla = [{
+        "id": "P999",
+        "codigoBarras": "775000000000",
+        "descripcion": "Ejemplo Producto",
+        "costoUnidad": 2.50,
+        "precioVenta": 4.00,
+        "stockActual": 50,
+        "fechaVencimiento": "2027-12-31"
+      }];
+      const ws = XLSX.utils.json_to_sheet(plantilla);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Plantilla_Productos");
+      XLSX.writeFile(wb, "Plantilla_Carga_Productos.xlsx");
+    }
+
+    function procesarExcelMasivo() {
+      const fileInput = document.getElementById("file-excel");
+      if (!fileInput.files.length) return alert("Seleccione un archivo Excel primero.");
+      
+      const reader = new FileReader();
+      reader.onload = async function(e) {
+        try {
+          const data = new Uint8Array(e.target.result);
+          const workbook = XLSX.read(data, { type: 'array' });
+          const firstSheet = workbook.SheetNames[0];
+          const rows = XLSX.utils.sheet_to_json(workbook.Sheets[firstSheet]);
+          
+          if (rows.length === 0) return alert("El archivo Excel está vacío.");
+
+          await enviarServidor("registroMasivoProductos", rows);
+          alert(`¡Se han importado ${rows.length} productos masivamente al Excel con éxito!`);
+          setTimeout(cargarDatosBD, 1500);
+        } catch (err) {
+          alert("Error al procesar el archivo Excel: " + err.message);
+        }
+      };
+      reader.readAsArrayBuffer(fileInput.files[0]);
+    }
+
     function descargarExcelProductos() {
       if (todosProductos.length === 0) return alert("No hay datos para exportar.");
       const dataExcel = todosProductos.map(p => ({
@@ -479,7 +577,7 @@
       }));
       const ws = XLSX.utils.json_to_sheet(dataExcel);
       const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, "Stock_Productos");
+      XLSX.utils.book_append_sheet(wb, ws, "Stock_Completo");
       XLSX.writeFile(wb, "Inventario_Completo_Minimarket.xlsx");
     }
   </script>
