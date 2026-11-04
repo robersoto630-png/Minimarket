@@ -41,7 +41,7 @@
 </head>
 <body>
 
-  <div class="version-badge">Versión: v3.5</div>
+  <div class="version-badge">Versión: v3.6</div>
 
   <!-- LOGIN -->
   <div id="login-view" class="login-container">
@@ -746,7 +746,7 @@
       const selMer = document.getElementById("sel-merma-prod");
       selMer.innerHTML = "";
       lista.forEach(cb => {
-        let vencLimpia = cb.fechaVencimiento || 'N/A';
+        let vencLimpia = cb.fechaVencimiento ? cb.fechaVencimiento.split(' ')[0] : 'N/A';
         selMer.innerHTML += `<option value="${cb.id}|${vencLimpia}">${cb.descripcion} (Venc: ${vencLimpia} - Stock: ${cb.stockActual})</option>`;
       });
       selMer.onchange = function() {
@@ -883,7 +883,12 @@
 
     function descargarExcelProductos() {
       if (codigosBarra.length === 0) return alert("No hay datos.");
-      const ws = XLSX.utils.json_to_sheet(codigosBarra);
+      // Limpiamos explícitamente la fecha para que se exporte limpia en formato dd/mm/yyyy
+      let datosLimpios = codigosBarra.map(cb => ({
+        ...cb,
+        fechaVencimiento: cb.fechaVencimiento ? cb.fechaVencimiento.split(' ')[0] : 'N/A'
+      }));
+      const ws = XLSX.utils.json_to_sheet(datosLimpios);
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, "Stock_Lotes");
       XLSX.writeFile(wb, "Inventario_Lotes_Minimarket.xlsx");
