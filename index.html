@@ -41,7 +41,7 @@
 </head>
 <body>
 
-  <div class="version-badge">Versión: v3.7</div>
+  <div class="version-badge">Versión: v3.8</div>
 
   <!-- LOGIN -->
   <div id="login-view" class="login-container">
@@ -521,13 +521,15 @@
       if (res.length > 0) {
         box.style.display = "block";
         res.forEach(cb => {
-          box.innerHTML += `<div class="search-item" onclick="agregarItemCarritoFinal('${cb.id}', '${cb.fechaVencimiento}'); document.getElementById('search-box').style.display='none'; document.getElementById('txt-buscar').value='';" title="Haga clic para agregar lote">${cb.descripcion} | Venc: ${cb.fechaVencimiento} | Stock: ${cb.stockActual} (S/ ${cb.precioVenta})</div>`;
+          let vencTxt = cb.fechaVencimiento ? cb.fechaVencimiento : "N/A";
+          box.innerHTML += `<div class="search-item" onclick="agregarItemCarritoFinal('${cb.id}', '${cb.fechaVencimiento}'); document.getElementById('search-box').style.display='none'; document.getElementById('txt-buscar').value='';" title="Haga clic para agregar lote">${cb.descripcion} | Venc: ${vencTxt} | Stock: ${cb.stockActual} (S/ ${cb.precioVenta})</div>`;
         });
       } else {
         box.style.display = "none";
       }
     }
 
+    // MODIFICADO: Muestra siempre la fecha de vencimiento limpia en el cuadro emergente de múltiples lotes
     function agregarAlCarrito(idProd) {
       const lotes = codigosBarra.filter(cb => cb.id === idProd && cb.stockActual > 0);
       if (lotes.length === 0) return alert("Producto sin stock disponible.");
@@ -536,7 +538,10 @@
         agregarItemCarritoFinal(lotes[0].id, lotes[0].fechaVencimiento);
       } else {
         let opciones = "Seleccione el lote (dd/mm/yyyy):\n";
-        lotes.forEach((l, idx) => opciones += `${idx + 1}. Venc: ${l.fechaVencimiento} - Stock: ${l.stockActual}\n`);
+        lotes.forEach((l, idx) => {
+          let vencTxt = l.fechaVencimiento ? l.fechaVencimiento : 'N/A';
+          opciones += `${idx + 1}. Venc: ${vencTxt} - Stock: ${l.stockActual}\n`;
+        });
         let eleccion = prompt(opciones, "1");
         if (eleccion === null) return;
         let idxSel = parseInt(eleccion) - 1;
@@ -742,12 +747,13 @@
       llenarSelectMerma(codigosBarra);
     }
 
+    // MODIFICADO: Llena el select de la pestaña Inventario con la fecha exacta en dd/mm/yyyy
     function llenarSelectMerma(lista) {
       const selMer = document.getElementById("sel-merma-prod");
       selMer.innerHTML = "";
       lista.forEach(cb => {
-        let vencLimpia = cb.fechaVencimiento || 'Sin Vencimiento';
-        selMer.innerHTML += `<option value="${cb.id}|${vencLimpia}">${cb.descripcion} (Venc: ${vencLimpia} - Stock: ${cb.stockActual})</option>`;
+        let vencTxt = cb.fechaVencimiento ? cb.fechaVencimiento : "N/A";
+        selMer.innerHTML += `<option value="${cb.id}|${vencTxt}">${cb.descripcion} (Venc: ${vencTxt} - Stock: ${cb.stockActual})</option>`;
       });
       selMer.onchange = function() {
         const val = selMer.value.split('|');
@@ -852,7 +858,7 @@
         "stockMinimo": 5,
         "stockActual": 50,
         "categoria": "Abarrotes",
-        "fechaVencimiento": "31/12/2027"
+        "fechaVencimiento": "31/10/2026"
       }];
       const ws = XLSX.utils.json_to_sheet(plantilla);
       const wb = XLSX.utils.book_new();
@@ -881,11 +887,16 @@
       reader.readAsArrayBuffer(fileInput.files[0]);
     }
 
+    // MODIFICADO: Exporta las fechas exactamente como están guardadas (dd/mm/yyyy)
     function descargarExcelProductos() {
       if (codigosBarra.length === 0) return alert("No hay datos.");
       let datosLimpios = codigosBarra.map(cb => ({
-        ...cb,
-        fechaVencimiento: cb.fechaVencimiento || 'Sin Vencimiento'
+        "ID_Producto": cb.id,
+        "Codigo_Barras": cb.codigoBarras,
+        "Descripcion": cb.descripcion,
+        "Precio_Venta": cb.precioVenta,
+        "Fecha_Vencimiento": cb.fechaVencimiento || 'N/A',
+        "Stock_Actual": cb.stockActual
       }));
       const ws = XLSX.utils.json_to_sheet(datosLimpios);
       const wb = XLSX.utils.book_new();
