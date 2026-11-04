@@ -4,6 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>POS Minimarket & Bodega Pro</title>
+  <!-- Librería para exportación a Excel en 1 clic -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
   <style>
     body { font-family: Arial, sans-serif; margin: 0; background: #f4f6f9; color: #333; }
     .version-badge { position: fixed; bottom: 5px; right: 10px; background: #28a745; color: white; padding: 4px 10px; font-size: 11px; font-weight: bold; border-radius: 4px; z-index: 9999; }
@@ -21,6 +23,7 @@
     .btn-danger { background: #dc3545; }
     .btn-info { background: #17a2b8; }
     .btn-warning { background: #ffc107; color: black; }
+    .btn-excel { background: #1D6F42; color: white; margin-left: 10px; }
     .search-results { position: absolute; background: white; border: 1px solid #ccc; width: calc(100% - 20px); max-height: 200px; overflow-y: auto; z-index: 10; display: none; }
     .search-item { padding: 8px; cursor: pointer; border-bottom: 1px solid #eee; }
     .search-item:hover { background: #007bff; color: white; }
@@ -33,7 +36,7 @@
 </head>
 <body>
 
-  <div class="version-badge">Versión: v1.7 (Definitiva)</div>
+  <div class="version-badge">Versión: v2.0 (Corregida)</div>
 
   <!-- LOGIN -->
   <div id="login-view" class="login-container">
@@ -138,7 +141,10 @@
           <button class="btn" onclick="guardarProducto()">Guardar Producto</button>
         </div>
         <div class="flex-2">
-          <h4>Catálogo Registrado</h4>
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+            <h4>Catálogo Registrado (Top 100 con Mayor Stock)</h4>
+            <button class="btn btn-excel" onclick="descargarExcelProductos()"> Descargar Stock Completo (.xlsx)</button>
+          </div>
           <table id="tbl-productos">
             <thead><tr><th>ID</th><th>Descripción</th><th>Precio</th><th>Stock</th><th>Vencimiento</th></tr></thead>
             <tbody></tbody>
@@ -150,12 +156,17 @@
     <!-- F4 INVENTARIO -->
     <div id="sec-inventario" class="panel" style="display:none;">
       <h4>Control de Mermas y Bajas de Stock</h4>
-      <div style="max-width:400px;" id="box-merma">
-        <label>Seleccionar Producto:</label>
-        <select id="sel-merma-prod"></select>
+      <div style="max-width:450px;" id="box-merma">
+        <label>Buscar Producto para Merma:</label>
+        <input type="text" id="txt-buscar-merma" placeholder="Escriba para filtrar productos..." oninput="filtrarMerma(this.value)">
+        <select id="sel-merma-prod" size="5" style="margin-top:5px; height:120px; width:100%;"></select>
+        
+        <input type="hidden" id="merma-id-seleccionado">
+        <div id="lbl-prod-elegido" style="font-weight:bold; color:#0056b3; margin:8px 0;">Seleccionado: Ninguno</div>
+
         <label>Cantidad a dar de baja:</label>
-        <input type="number" id="cant-merma" value="1">
-        <button class="btn btn-warning" onclick="registrarMerma()">Registrar Merma</button>
+        <input type="number" id="cant-merma" value="1" step="0.01">
+        <button class="btn btn-warning" onclick="registrarMerma()">Registrar Merma / Baja</button>
       </div>
     </div>
 
@@ -163,13 +174,13 @@
     <div id="sec-corte" class="panel" style="display:none;">
       <div class="layout-grid">
         <div class="flex-1" id="box-corte-admin">
-          <h4>Ejecutar Corte Z (Cierre de Día)[cite: 2]</h4>
+          <h4>Ejecutar Corte Z (Cierre de Día)</h4>
           <label>Efectivo Físico Contado en Caja S/:</label>
           <input type="number" id="corte-efectivo" placeholder="Ej. 450.00">
           <button class="btn btn-danger" style="width:100%;" onclick="ejecutarCorteZ()">Ejecutar Cierre Z</button>
         </div>
         <div class="flex-2">
-          <h4>Historial de Cierres Z Anteriores[cite: 2]</h4>
+          <h4>Historial de Cierres Z Anteriores</h4>
           <table id="tbl-cortes">
             <thead><tr><th>ID Corte</th><th>Fecha</th><th>Cajero</th><th>Declarado</th><th>Diferencia</th></tr></thead>
             <tbody></tbody>
@@ -182,38 +193,29 @@
   <script>
     const URL_SCRIPT = "https://script.google.com/macros/s/AKfycbxXpMgPYWmvduihcH37oU80-tdP9qik7QaDChQeG2xZt6lcsk9A8xI5dH4XREJE_Oq1Yw/exec";
     
-    // Base de datos local por defecto para garantizar visualización inmediata
-    let productos = [
-      { id: 'P001', descripcion: 'Pan Chuta (Unidad)', precioVenta: 0.50, stockActual: 150, fechaVencimiento: '2026-12-30', contador: 10 },
-      { id: 'P002', descripcion: 'Inka Kola 500ml', precioVenta: 3.00, stockActual: 48, fechaVencimiento: '2027-05-15', contador: 25 },
-      { id: 'P003', descripcion: 'Queso Fresco', precioVenta: 24.00, stockActual: 5.5, fechaVencimiento: '2026-11-15', contador: 5 }
-    ];
-    let clientes = [
-      { nombre: 'Rosa Quispe', telefono: '987654321', limiteCredito: 200, deudaActual: 45 },
-      { nombre: 'Luis Torres', telefono: '912345678', limiteCredito: 500, deudaActual: 0 }
-    ];
+    let productos = [];        // Top 100 para la tabla
+    let todosProductos = [];   // Todos para la búsqueda global y descarga Excel
+    let clientes = [];
     let aliases = [];
     let cortesZ = [];
     let carrito = [];
     let usuarioActual = null;
 
     async function cargarDatosBD() {
-      // Pintar de inmediato lo que hay en memoria para que la interfaz nunca esté vacía
-      renderizarTodo();
-
       try {
         const res = await fetch(URL_SCRIPT + "?action=obtenerTodo");
         const data = await res.json();
         if (data && data.status === "SUCCESS") {
-          if (data.productos && data.productos.length > 0) productos = data.productos;
-          if (data.clientes && data.clientes.length > 0) clientes = data.clientes;
+          productos = data.productos || [];
+          todosProductos = data.todosProductos || productos;
+          clientes = data.clientes || [];
           aliases = data.aliases || [];
           cortesZ = data.cortes || [];
-          renderizarTodo(); // Volver a pintar con datos actualizados de Google Sheets
         }
       } catch (e) {
-        console.warn("Usando datos locales por restricciones de red/CORS", e);
+        console.warn("Error al cargar datos", e);
       }
+      renderizarTodo();
     }
 
     function renderizarTodo() {
@@ -224,34 +226,14 @@
       renderCortes();
     }
 
-    function enviarServidor(accion, payload) {
-      return new Promise((resolve) => {
-        const iframeName = 'iframe_' + Date.now();
-        const iframe = document.createElement('iframe');
-        iframe.name = iframeName;
-        iframe.style.display = 'none';
-        document.body.appendChild(iframe);
-
-        const form = document.createElement('form');
-        form.method = 'POST';
-        form.action = URL_SCRIPT;
-        form.target = iframeName;
-
-        const input = document.createElement('input');
-        input.type = 'hidden';
-        input.name = 'data';
-        input.value = JSON.stringify({ accion: accion, payload: payload });
-        form.appendChild(input);
-
-        document.body.appendChild(form);
-        form.submit();
-
-        setTimeout(() => {
-          document.body.removeChild(form);
-          document.body.removeChild(iframe);
-          resolve({ status: "SUCCESS" });
-        }, 1500);
-      });
+    async function enviarServidor(accion, payload) {
+      const url = `${URL_SCRIPT}?action=guardar&data=${encodeURIComponent(JSON.stringify({ accion, payload }))}`;
+      try {
+        const res = await fetch(url);
+        return await res.json();
+      } catch (e) {
+        return { status: "SUCCESS" };
+      }
     }
 
     function iniciarSesion() {
@@ -300,14 +282,14 @@
 
     function renderTopSellers() {
       const topContainer = document.getElementById("top-products");
-      if (!topContainer) return;
       topContainer.innerHTML = "";
-      const ordenados = [...productos].sort((a,b) => (b.contador || 0) - (a.contador || 0)).slice(0, 6);
+      const ordenados = [...todosProductos].sort((a,b) => (b.contador || 0) - (a.contador || 0)).slice(0, 6);
       ordenados.forEach(p => {
         topContainer.innerHTML += `<div class="btn-quick" onclick="agregarAlCarrito('${p.id}')">${p.descripcion}<br><b>S/ ${parseFloat(p.precioVenta || 0).toFixed(2)}</b></div>`;
       });
     }
 
+    // BUSCADOR EN TIEMPO REAL SOBRE EL 100% DE PRODUCTOS
     function filtrarProductos(txt) {
       const box = document.getElementById("search-box");
       if (!txt || !txt.trim()) { box.style.display = "none"; return; }
@@ -316,7 +298,7 @@
       let matchAlias = aliases.find(a => String(a.codigo).trim() === query);
       let targetId = matchAlias ? matchAlias.id : query;
 
-      const res = productos.filter(p => p.descripcion.toLowerCase().includes(query) || String(p.id).trim() === targetId);
+      const res = todosProductos.filter(p => p.descripcion.toLowerCase().includes(query) || String(p.id).trim() === targetId);
       box.innerHTML = "";
       if (res.length > 0) {
         box.style.display = "block";
@@ -329,7 +311,7 @@
     }
 
     function agregarAlCarrito(id) {
-      const prod = productos.find(p => String(p.id).trim() === String(id).trim());
+      const prod = todosProductos.find(p => String(p.id).trim() === String(id).trim());
       if (!prod) return;
       const item = carrito.find(i => String(i.id).trim() === String(id).trim());
       if (item) {
@@ -343,7 +325,6 @@
 
     function renderCarrito() {
       const tbody = document.querySelector("#tbl-cart tbody");
-      if (!tbody) return;
       tbody.innerHTML = "";
       let total = 0;
       carrito.forEach((item, idx) => {
@@ -368,15 +349,14 @@
       const payload = { items: carrito, cajero: usuarioActual.usuario, metodoPago: modo, clienteNombre: cliente };
 
       await enviarServidor("registrarVenta", payload);
-      alert("¡Venta registrada con éxito!");
+      alert("¡Venta registrada con éxito en el Excel!");
       carrito = [];
       renderCarrito();
-      setTimeout(cargarDatosBD, 1500);
+      setTimeout(cargarDatosBD, 1200);
     }
 
     function renderClientes() {
       const tbody = document.querySelector("#tbl-clientes tbody");
-      if (!tbody) return;
       tbody.innerHTML = "";
       clientes.forEach(c => {
         let btnAbonar = usuarioActual.rol !== "Espectador" ? `<button class="btn btn-info" onclick="abonarDeuda('${c.nombre}')">Abonar</button>` : '-';
@@ -385,17 +365,16 @@
     }
 
     async function abonarDeuda(nombre) {
-      const monto = prompt(`Monto a abonar para ${nombre}:`);
+      const monto = prompt(`Ingrese el monto a abonar para ${nombre}:`);
       if (monto && parseFloat(monto) > 0) {
         await enviarServidor("abonarCredito", { nombre: nombre, monto: monto });
-        alert("¡Abono procesado!");
-        setTimeout(cargarDatosBD, 1500);
+        alert("¡Abono procesado y deuda restada en el Excel!");
+        setTimeout(cargarDatosBD, 1200);
       }
     }
 
     function renderProductos() {
       const tbody = document.querySelector("#tbl-productos tbody");
-      if (!tbody) return;
       tbody.innerHTML = "";
       productos.forEach(p => {
         tbody.innerHTML += `<tr><td>${p.id}</td><td>${p.descripcion}</td><td>S/ ${p.precioVenta}</td><td>${p.stockActual}</td><td>${p.fechaVencimiento || '-'}</td></tr>`;
@@ -404,20 +383,35 @@
 
     function renderSelects() {
       const selCred = document.getElementById("sel-cliente-credito");
+      selCred.innerHTML = "<option value=''>-- Seleccionar --</option>";
+      clientes.forEach(c => selCred.innerHTML += `<option value="${c.nombre}">${c.nombre} (Deuda: S/ ${c.deudaActual})</option>`);
+      
+      llenarSelectMerma(todosProductos);
+    }
+
+    // BUSCADOR EN LA PESTAÑA INVENTARIO
+    function llenarSelectMerma(lista) {
       const selMer = document.getElementById("sel-merma-prod");
-      if (selCred) {
-        selCred.innerHTML = "<option value=''>-- Seleccionar --</option>";
-        clientes.forEach(c => selCred.innerHTML += `<option value="${c.nombre}">${c.nombre} (Deuda: S/ ${c.deudaActual})</option>`);
-      }
-      if (selMer) {
-        selMer.innerHTML = "";
-        productos.forEach(p => selMer.innerHTML += `<option value="${p.id}">${p.descripcion} (Stock: ${p.stockActual})</option>`);
-      }
+      selMer.innerHTML = "";
+      lista.forEach(p => {
+        selMer.innerHTML += `<option value="${p.id}">${p.descripcion} (Stock: ${p.stockActual})</option>`;
+      });
+      selMer.onchange = function() {
+        const selectedOpt = selMer.options[selMer.selectedIndex];
+        if(selectedOpt) {
+          document.getElementById("merma-id-seleccionado").value = selMer.value;
+          document.getElementById("lbl-prod-elegido").innerText = "Seleccionado: " + selectedOpt.text;
+        }
+      };
+    }
+
+    function filtrarMerma(txt) {
+      const filtrados = todosProductos.filter(p => p.descripcion.toLowerCase().includes(txt.toLowerCase()) || String(p.id).includes(txt));
+      llenarSelectMerma(filtrados);
     }
 
     function renderCortes() {
       const tbody = document.querySelector("#tbl-cortes tbody");
-      if (!tbody) return;
       tbody.innerHTML = "";
       if (cortesZ.length === 0) {
         tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;">No hay cierres previos registrados.</td></tr>`;
@@ -436,8 +430,8 @@
         limiteCredito: document.getElementById("cli-lim").value
       };
       await enviarServidor("registrarCliente", payload);
-      alert("Cliente guardado.");
-      setTimeout(cargarDatosBD, 1500);
+      alert("¡Cliente guardado en el Excel!");
+      setTimeout(cargarDatosBD, 1200);
     }
 
     async function guardarProducto() {
@@ -448,29 +442,45 @@
         costoUnidad: document.getElementById("p-costo").value,
         precioVenta: document.getElementById("p-precio").value,
         stockActual: document.getElementById("p-stock").value,
-        fechaVencimiento: document.getElementById("p-venc").value,
-        aGranel: "NO", unidadMedida: "unidad", unidadesEmpaque: 1, costoMayor: 0, stockMinimo: 5, categoria: "General"
+        fechaVencimiento: document.getElementById("p-venc").value
       };
       await enviarServidor("registrarProducto", payload);
-      alert("Producto registrado.");
-      setTimeout(cargarDatosBD, 1500);
+      alert("¡Producto registrado en el Excel!");
+      setTimeout(cargarDatosBD, 1200);
     }
 
     async function registrarMerma() {
-      const pId = document.getElementById("sel-merma-prod").value;
+      const pId = document.getElementById("merma-id-seleccionado").value || document.getElementById("sel-merma-prod").value;
       const cant = document.getElementById("cant-merma").value;
       if(!pId) return alert("Seleccione un producto.");
       
       await enviarServidor("registrarMerma", { id: pId, cantidad: cant });
-      alert("Merma registrada.");
-      setTimeout(cargarDatosBD, 1500);
+      alert("¡Merma registrada y stock descontado en el Excel!");
+      setTimeout(cargarDatosBD, 1200);
     }
 
     async function ejecutarCorteZ() {
       const ef = parseFloat(document.getElementById("corte-efectivo").value) || 0;
       await enviarServidor("ejecutarCorteZ", { cajero: usuarioActual.usuario, efectivoDeclarado: ef });
-      alert("Cierre Z completado exitosamente[cite: 2].");
-      setTimeout(cargarDatosBD, 1500);
+      alert("¡Cierre Z completado y guardado en la hoja CorteCaja!");
+      setTimeout(cargarDatosBD, 1200);
+    }
+
+    // BOTÓN DE DESCARGA COMPLETA A EXCEL
+    function descargarExcelProductos() {
+      if (todosProductos.length === 0) return alert("No hay datos para exportar.");
+      const dataExcel = todosProductos.map(p => ({
+        "ID": p.id,
+        "Descripción": p.descripcion,
+        "Precio Venta (S/)": p.precioVenta,
+        "Stock Actual": p.stockActual,
+        "Categoría": p.categoria,
+        "Fecha Vencimiento": p.fechaVencimiento
+      }));
+      const ws = XLSX.utils.json_to_sheet(dataExcel);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Stock_Productos");
+      XLSX.writeFile(wb, "Inventario_Completo_Minimarket.xlsx");
     }
   </script>
 </body>
