@@ -38,7 +38,7 @@
 </head>
 <body>
 
-  <div class="version-badge">Versión: v3.2</div>
+  <div class="version-badge">Versión: v3.3</div>
 
   <!-- LOGIN -->
   <div id="login-view" class="login-container">
@@ -193,7 +193,16 @@
             <input type="number" id="p-minimo" value="5">
 
             <label>Categoría:</label>
-            <input type="text" id="p-cat" value="General">
+            <select id="p-cat">
+              <option value="Abarrotes">Abarrotes</option>
+              <option value="Bebidas">Bebidas</option>
+              <option value="Lácteos">Lácteos</option>
+              <option value="Limpieza">Limpieza</option>
+              <option value="Golosinas">Golosinas</option>
+              <option value="Embutidos">Embutidos</option>
+              <option value="Frutas y Verduras">Frutas y Verduras</option>
+              <option value="Otros" selected>Otros</option>
+            </select>
           </div>
 
           <label>Codigo_Barras:</label>
@@ -215,12 +224,25 @@
         </div>
 
         <div class="flex-2">
-          <div style="display:flex; justify-content:space-between; align-items:center;">
+          <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:5px;">
             <h4>Catálogo Registrado</h4>
-            <button class="btn btn-excel" onclick="descargarExcelProductos()">Descargar Stock (.xlsx)</button>
+            <div style="display:flex; gap:5px; align-items:center;">
+              <select id="filtro-categoria" onchange="renderProductos()" style="padding:5px; margin:0; width:150px;">
+                <option value="TODAS">Todas las categorías</option>
+                <option value="Abarrotes">Abarrotes</option>
+                <option value="Bebidas">Bebidas</option>
+                <option value="Lácteos">Lácteos</option>
+                <option value="Limpieza">Limpieza</option>
+                <option value="Golosinas">Golosinas</option>
+                <option value="Embutidos">Embutidos</option>
+                <option value="Frutas y Verduras">Frutas y Verduras</option>
+                <option value="Otros">Otros</option>
+              </select>
+              <button class="btn btn-excel" onclick="descargarExcelProductos()">Descargar Stock (.xlsx)</button>
+            </div>
           </div>
           <table id="tbl-productos">
-            <thead><tr><th>ID</th><th>Descripción</th><th>Precio Reg.</th><th>Precio Mayor</th><th>Stock Total</th></tr></thead>
+            <thead><tr><th>ID</th><th>Descripción</th><th>Categoría</th><th>Precio Reg.</th><th>Stock</th></tr></thead>
             <tbody></tbody>
           </table>
         </div>
@@ -451,11 +473,14 @@
         agregarItemCarritoFinal(lotes[0].id, lotes[0].fechaVencimiento);
       } else {
         let opciones = "Existen múltiples lotes (dd/mm/yyyy):\n";
-        lotes.forEach((l, idx) => opciones += `${idx + 1}. Venc: ${l.fechaVencimiento} - Stock: ${l.stockActual}\n`);
+        lotes.forEach((l, idx) => opciones += `${idx + 1}. Venc: ${l.fechaVencimiento || 'N/A'} - Stock: ${l.stockActual}\n`);
         let eleccion = prompt(opciones, "1");
+        if (eleccion === null) return;
         let idxSel = parseInt(eleccion) - 1;
         if (lotes[idxSel]) {
           agregarItemCarritoFinal(lotes[idxSel].id, lotes[idxSel].fechaVencimiento);
+        } else {
+          alert("Selección de lote inválida.");
         }
       }
     }
@@ -537,8 +562,15 @@
     function renderProductos() {
       const tbody = document.querySelector("#tbl-productos tbody");
       tbody.innerHTML = "";
-      productos.forEach(p => {
-        tbody.innerHTML += `<tr><td>${p.id}</td><td>${p.descripcion}</td><td>S/ ${p.precioVenta}</td><td>S/ ${p.precioMayor || '-'}</td><td>${p.stockActual}</td></tr>`;
+      const categoriaFiltro = document.getElementById("filtro-categoria").value;
+      
+      const productosFiltrados = productos.filter(p => {
+        if (categoriaFiltro === "TODAS") return true;
+        return (p.categoria || "").toLowerCase() === categoriaFiltro.toLowerCase();
+      });
+
+      productosFiltrados.forEach(p => {
+        tbody.innerHTML += `<tr><td>${p.id}</td><td>${p.descripcion}</td><td>${p.categoria || 'General'}</td><td>S/ ${p.precioVenta}</td><td>${p.stockActual}</td></tr>`;
       });
     }
 
@@ -658,7 +690,7 @@
         "precioMayor": 3.50,
         "stockMinimo": 5,
         "stockActual": 50,
-        "categoria": "General",
+        "categoria": "Abarrotes",
         "fechaVencimiento": "31/12/2027"
       }];
       const ws = XLSX.utils.json_to_sheet(plantilla);
