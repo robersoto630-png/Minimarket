@@ -41,7 +41,7 @@
 </head>
 <body>
 
-  <div class="version-badge">Versión: v3.6</div>
+  <div class="version-badge">Versión: v3.7</div>
 
   <!-- LOGIN -->
   <div id="login-view" class="login-container">
@@ -521,7 +521,7 @@
       if (res.length > 0) {
         box.style.display = "block";
         res.forEach(cb => {
-          box.innerHTML += `<div class="search-item" onclick="agregarItemCarritoFinal('${cb.id}', '${cb.fechaVencimiento}'); document.getElementById('search-box').style.display='none'; document.getElementById('txt-buscar').value='';" title="Haga clic para agregar lote">${cb.descripcion} | Venc: ${cb.fechaVencimiento || 'N/A'} | Stock: ${cb.stockActual} (S/ ${cb.precioVenta})</div>`;
+          box.innerHTML += `<div class="search-item" onclick="agregarItemCarritoFinal('${cb.id}', '${cb.fechaVencimiento}'); document.getElementById('search-box').style.display='none'; document.getElementById('txt-buscar').value='';" title="Haga clic para agregar lote">${cb.descripcion} | Venc: ${cb.fechaVencimiento} | Stock: ${cb.stockActual} (S/ ${cb.precioVenta})</div>`;
         });
       } else {
         box.style.display = "none";
@@ -536,7 +536,7 @@
         agregarItemCarritoFinal(lotes[0].id, lotes[0].fechaVencimiento);
       } else {
         let opciones = "Seleccione el lote (dd/mm/yyyy):\n";
-        lotes.forEach((l, idx) => opciones += `${idx + 1}. Venc: ${l.fechaVencimiento || 'N/A'} - Stock: ${l.stockActual}\n`);
+        lotes.forEach((l, idx) => opciones += `${idx + 1}. Venc: ${l.fechaVencimiento} - Stock: ${l.stockActual}\n`);
         let eleccion = prompt(opciones, "1");
         if (eleccion === null) return;
         let idxSel = parseInt(eleccion) - 1;
@@ -746,7 +746,7 @@
       const selMer = document.getElementById("sel-merma-prod");
       selMer.innerHTML = "";
       lista.forEach(cb => {
-        let vencLimpia = cb.fechaVencimiento ? cb.fechaVencimiento.split(' ')[0] : 'N/A';
+        let vencLimpia = cb.fechaVencimiento || 'Sin Vencimiento';
         selMer.innerHTML += `<option value="${cb.id}|${vencLimpia}">${cb.descripcion} (Venc: ${vencLimpia} - Stock: ${cb.stockActual})</option>`;
       });
       selMer.onchange = function() {
@@ -883,10 +883,9 @@
 
     function descargarExcelProductos() {
       if (codigosBarra.length === 0) return alert("No hay datos.");
-      // Limpiamos explícitamente la fecha para que se exporte limpia en formato dd/mm/yyyy
       let datosLimpios = codigosBarra.map(cb => ({
         ...cb,
-        fechaVencimiento: cb.fechaVencimiento ? cb.fechaVencimiento.split(' ')[0] : 'N/A'
+        fechaVencimiento: cb.fechaVencimiento || 'Sin Vencimiento'
       }));
       const ws = XLSX.utils.json_to_sheet(datosLimpios);
       const wb = XLSX.utils.book_new();
