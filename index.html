@@ -38,7 +38,7 @@
 </head>
 <body>
 
-  <div class="version-badge">Versión: v3.3</div>
+  <div class="version-badge">Versión: v3.4</div>
 
   <!-- LOGIN -->
   <div id="login-view" class="login-container">
@@ -68,7 +68,7 @@
       <button onclick="verTab('clientes', this)">F2 Clientes</button>
       <button onclick="verTab('productos', this)" id="tab-prod">F3 Productos</button>
       <button onclick="verTab('inventario', this)" id="tab-inv">F4 Inventario</button>
-      <button onclick="verTab('corte', this)" id="tab-corte">Corte Z / Caja</button>
+      <button onclick="verTab('corte', this)" id="tab-corte">Cortes / Caja</button>
     </div>
 
     <!-- F1 VENTAS -->
@@ -115,6 +115,7 @@
           </div>
 
           <button id="btn-cobrar" class="btn" style="width:100%; margin-top:10px; background:#007bff;" onclick="procesarPago()">Cobrar Venta</button>
+          <button class="btn btn-info" style="width:100%; margin-top:5px;" onclick="imprimirUltimoComprobante()">🖨️ Imprimir Última Boleta / Factura</button>
         </div>
       </div>
     </div>
@@ -267,21 +268,25 @@
       </div>
     </div>
 
-    <!-- CORTE Z -->
+    <!-- CORTE Z / X -->
     <div id="sec-corte" class="panel" style="display:none;">
       <div class="layout-grid">
         <div class="flex-1" id="box-corte-admin">
-          <h4>Ejecutar Corte Z (Cierre de Día)[cite: 2]</h4>
+          <h4>Control de Cajas y Turnos</h4>
           <label>Monto de Caja Inicial S/:</label>
           <input type="number" id="corte-inicial" readonly style="background:#e9ecef;">
           <label>Efectivo Físico Declarado en Caja S/:</label>
           <input type="number" id="corte-efectivo" placeholder="Ej. 450.00">
-          <button class="btn btn-danger" style="width:100%;" onclick="ejecutarCorteZ()">Ejecutar Cierre Z</button>
+          
+          <div style="display:flex; gap:10px; margin-top:10px;">
+            <button class="btn btn-info" style="flex:1;" onclick="ejecutarCorte('CORTE_X')">Ejecutar Corte X (Turno)</button>
+            <button class="btn btn-danger" style="flex:1;" onclick="ejecutarCorte('CORTE_Z')">Ejecutar Corte Z (Día)</button>
+          </div>
         </div>
         <div class="flex-2">
-          <h4>Historial de Cierres Z Anteriores[cite: 2]</h4>
+          <h4>Historial de Cortes (X y Z)</h4>
           <table id="tbl-cortes">
-            <thead><tr><th>ID Corte</th><th>Fecha</th><th>Cajero</th><th>Inicial</th><th>Efectivo</th><th>Yape</th><th>Plin</th><th>Diferencia</th></tr></thead>
+            <thead><tr><th>ID</th><th>Tipo</th><th>Fecha</th><th>Cajero</th><th>Efectivo</th><th>Yape</th><th>Plin</th><th>Dif.</th></tr></thead>
             <tbody></tbody>
           </table>
         </div>
@@ -300,6 +305,7 @@
     let usuarioActual = null;
     let montoCajaInicial = 100.00;
     let html5QrCode = null;
+    let ultimaVentaRegistrada = null;
 
     async function cargarDatosBD(mostrarAviso = false) {
       try {
@@ -472,7 +478,7 @@
       if (lotes.length === 1) {
         agregarItemCarritoFinal(lotes[0].id, lotes[0].fechaVencimiento);
       } else {
-        let opciones = "Existen múltiples lotes (dd/mm/yyyy):\n";
+        let opciones = "Seleccione el lote (dd/mm/yyyy):\n";
         lotes.forEach((l, idx) => opciones += `${idx + 1}. Venc: ${l.fechaVencimiento || 'N/A'} - Stock: ${l.stockActual}\n`);
         let eleccion = prompt(opciones, "1");
         if (eleccion === null) return;
@@ -535,11 +541,107 @@
 
       const payload = { items: carrito, cajero: usuarioActual.usuario, metodoPago: modo, clienteNombre: cliente };
 
-      await enviarServidor("registrarVenta", payload);
-      alert("¡Venta registrada con éxito!");
+      const res = await enviarServidor("registrarVenta", payload);
+      if (res && res.status === "SUCCESS") {
+        ultimaVentaRegistrada = {
+          idVenta: res.idVenta,
+          items: [...carrito],
+          total: carrito.reduce((acc, i) => acc + i.total, 0),
+          cajero: usuarioActual.usuario,
+          metodoPago: modo,
+          fecha: new Date().toLocaleString()
+        };
+        alert("¡Venta registrada con éxito!");
+        if (confirm("¿Deseas imprimir el comprobante de esta venta ahora?")) {
+          imprimirUltimoComprobante();
+        }
+      }
       carrito = [];
       renderCarrito();
       setTimeout(() => cargarDatosBD(false), 1000);
+    }
+
+    function imprimirUltimoComprobante() {
+      if (!ultimaVentaRegistrada) return alert("No hay ninguna venta registrada recientemente en esta sesión.");
+      
+      let tipoComprobante = prompt("¿Qué desea emitir?\n1. Boleta\n2. Factura", "1");
+      if (tipoComprobante !== "1" && tipoComprobante !== "2") return;
+      
+      let numComprobante = ultimaVentaRegistrada.idVenta;
+      let serieFacturaTxt = "";
+      let logoSrc = "boleta.jfif";
+      
+      if (tipoComprobante === "2") {
+        logoSrc = "factura.jfif";
+        serieFacturaTxt = prompt("Ingrese la Serie y Número de Factura (Ej. F001-000245):", "F001-000001");
+        if (!serieFacturaTxt) return;
+      }
+
+      let ventanaImpresion = window.open('', '_blank', 'width=350,height=600');
+      let htmlContenido = `
+        <html>
+        <head>
+          <title>Comprobante</title>
+          <style>
+            body { font-family: 'Courier New', Courier, monospace; font-size: 12px; width: 280px; margin: 0 auto; background: white; color: black; }
+            .text-center { text-align: center; }
+            .text-right { text-align: right; }
+            hr { border: dashed 1px #000; }
+            table { width: 100%; border-collapse: collapse; }
+            th, td { font-size: 11px; padding: 2px 0; }
+          </style>
+        </head>
+        <body>
+          <div class="text-center">
+            <img src="${logoSrc}" style="max-width: 100px; height: auto;" onerror="this.style.display='none'"/>
+            <h3>MINIMARKET POS PRO</h3>
+            <p>RUC: 20123456789<br>Av. Principal 123 - Lima</p>
+            <hr>
+            <h4>${tipoComprobante === "2" ? "FACTURA ELECTRÓNICA" : "BOLETA DE VENTA"}</h4>
+            <p><b>${tipoComprobante === "2" ? serieFacturaTxt : 'N° ' + numComprobante}</b><br>Fecha: ${ultimaVentaRegistrada.fecha}<br>Cajero: ${ultimaVentaRegistrada.cajero}</p>
+          </div>
+          <hr>
+          <table>
+            <thead>
+              <tr><th>Cant. Descripción</th><th class="text-right">Total</th></tr>
+            </thead>
+            <tbody>
+      `;
+
+      ultimaVentaRegistrada.items.forEach(i => {
+        htmlContenido += `
+          <tr>
+            <td colspan="2">${i.cantidad} x ${i.descripcion}<br><small>Venc: ${i.fechaVencimiento || 'N/A'}</small></td>
+          </tr>
+          <tr>
+            <td>S/. ${i.precioUnitario.toFixed(2)} c/u</td>
+            <td class="text-right">S/. ${i.total.toFixed(2)}</td>
+          </tr>
+        `;
+      });
+
+      htmlContenido += `
+            </tbody>
+          </table>
+          <hr>
+          <table>
+            <tr><td><b>METODO PAGO:</b></td><td class="text-right">${ultimaVentaRegistrada.metodoPago}</td></tr>
+            <tr><td><h3>TOTAL A PAGAR:</h3></td><td class="text-right"><h3>S/. ${ultimaVentaRegistrada.total.toFixed(2)}</h3></td></tr>
+          </table>
+          <hr>
+          <div class="text-center">
+            <p>¡Gracias por su compra!<br>Consulte su comprobante en nuestra web</p>
+          </div>
+        </body>
+        </html>
+      `;
+
+      ventanaImpresion.document.write(htmlContenido);
+      ventanaImpresion.document.close();
+      setTimeout(() => {
+        ventanaImpresion.focus();
+        ventanaImpresion.print();
+      }, 500);
     }
 
     function renderClientes() {
@@ -586,7 +688,8 @@
       const selMer = document.getElementById("sel-merma-prod");
       selMer.innerHTML = "";
       lista.forEach(cb => {
-        selMer.innerHTML += `<option value="${cb.id}|${cb.fechaVencimiento}">${cb.descripcion} (Venc: ${cb.fechaVencimiento || 'N/A'} - Stock: ${cb.stockActual})</option>`;
+        let vencLimpia = cb.fechaVencimiento || 'N/A';
+        selMer.innerHTML += `<option value="${cb.id}|${vencLimpia}">${cb.descripcion} (Venc: ${vencLimpia} - Stock: ${cb.stockActual})</option>`;
       });
       selMer.onchange = function() {
         const val = selMer.value.split('|');
@@ -605,11 +708,11 @@
       const tbody = document.querySelector("#tbl-cortes tbody");
       tbody.innerHTML = "";
       if (cortesZ.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;">No hay cierres previos registrados.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;">No hay cortes previos registrados.</td></tr>`;
         return;
       }
       cortesZ.forEach(cz => {
-        tbody.innerHTML += `<tr><td>${cz.idCorte}</td><td>${cz.fecha}</td><td>${cz.cajero}</td><td>S/ ${cz.montoInicial}</td><td>S/ ${cz.efectivo}</td><td>S/ ${cz.yape}</td><td>S/ ${cz.plin}</td><td>S/ ${cz.diferencia}</td></tr>`;
+        tbody.innerHTML += `<tr><td>${cz.idCorte}</td><td>${cz.tipo}</td><td>${cz.fecha}</td><td>${cz.cajero}</td><td>S/ ${cz.efectivo}</td><td>S/ ${cz.yape}</td><td>S/ ${cz.plin}</td><td>S/ ${cz.diferencia}</td></tr>`;
       });
     }
 
@@ -669,10 +772,10 @@
       setTimeout(() => cargarDatosBD(false), 1000);
     }
 
-    async function ejecutarCorteZ() {
+    async function ejecutarCorte(tipo) {
       const ef = parseFloat(document.getElementById("corte-efectivo").value) || 0;
-      await enviarServidor("ejecutarCorteZ", { cajero: usuarioActual.usuario, montoInicial: montoCajaInicial, efectivoDeclarado: ef });
-      alert("¡Cierre Z completado exitosamente!");
+      await enviarServidor("ejecutarCorte", { cajero: usuarioActual.usuario, montoInicial: montoCajaInicial, efectivoDeclarado: ef, tipo: tipo });
+      alert(`¡${tipo === 'CORTE_X' ? 'Corte X de Turno' : 'Corte Z Final (y migración mensual si aplica)'} completado con éxito!`);
       setTimeout(() => cargarDatosBD(false), 1000);
     }
 
