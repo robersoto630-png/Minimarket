@@ -26,6 +26,7 @@
     .btn-excel { background: #1D6F42; color: white; }
     .btn-camara { background: #6f42c1; color: white; margin-top: 5px; width: 100%; }
     .btn-refresh { background: #17a2b8; color: white; padding: 4px 10px; font-size: 12px; margin-left: 10px; border-radius: 4px; border: none; cursor: pointer; }
+    .btn-gear { background: #343a40; color: white; padding: 6px 10px; font-size: 14px; border-radius: 4px; border: none; cursor: pointer; margin-left: 10px; }
     .search-results { position: absolute; background: white; border: 1px solid #ccc; width: calc(100% - 20px); max-height: 200px; overflow-y: auto; z-index: 10; display: none; }
     .search-item { padding: 8px; cursor: pointer; border-bottom: 1px solid #eee; }
     .search-item:hover { background: #007bff; color: white; }
@@ -34,11 +35,13 @@
     th { background: #f8f9fa; }
     .quick-buttons { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 8px; margin-top: 10px; }
     .btn-quick { padding: 12px 5px; background: #e3f2fd; border: 1px solid #90caf9; border-radius: 4px; font-weight: bold; cursor: pointer; text-align: center; }
+    .modal { display: none; position: fixed; z-index: 999; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); }
+    .modal-content { background: white; margin: 10% auto; padding: 20px; width: 90%; max-width: 450px; border-radius: 6px; box-shadow: 0 4px 10px rgba(0,0,0,0.2); }
   </style>
 </head>
 <body>
 
-  <div class="version-badge">Versión: v3.4</div>
+  <div class="version-badge">Versión: v3.5</div>
 
   <!-- LOGIN -->
   <div id="login-view" class="login-container">
@@ -59,6 +62,7 @@
       <div style="display:flex; align-items:center;">
         <span id="user-display"></span>
         <button class="btn-refresh" onclick="cargarDatosBD(true)">🔄 Actualizar</button>
+        <button id="btn-config-sunat" class="btn-gear" style="display:none;" onclick="abrirConfigSunat()" title="Configuración SUNAT">⚙️</button>
         <button class="btn btn-danger" style="margin-left:10px; padding:4px 8px;" onclick="location.reload()">Salir</button>
       </div>
     </div>
@@ -95,7 +99,7 @@
         <div class="flex-1" style="background:#f8f9fa; padding:12px; border-radius:6px; border:1px solid #ddd;">
           <h4>Carrito de Compras</h4>
           <table id="tbl-cart">
-            <thead><tr><th>Prod / Lote Venc.</th><th>Cant</th><th>Total</th><th>X</th></tr></thead>
+            <thead><tr><th>Producto</th><th>Cant</th><th>Total</th><th>X</th></tr></thead>
             <tbody></tbody>
           </table>
           <h2 id="lbl-total" style="color:#0056b3;">Total: S/ 0.00</h2>
@@ -294,6 +298,25 @@
     </div>
   </div>
 
+  <!-- MODAL CONFIGURACION SUNAT -->
+  <div id="modal-sunat" class="modal">
+    <div class="modal-content">
+      <h3>⚙️ Configuración Facturación Electrónica SUNAT</h3>
+      <label>RUC de la Empresa:</label>
+      <input type="text" id="sunat-ruc" placeholder="Ej. 20123456789">
+      <label>Usuario Secundario SOL:</label>
+      <input type="text" id="sunat-user" placeholder="USUARIO01">
+      <label>Clave SOL:</label>
+      <input type="password" id="sunat-pass" placeholder="••••••••">
+      <label>Token / API Key (Proveedor OSE/PSE):</label>
+      <input type="text" id="sunat-token" placeholder="Token API...">
+      <div style="display:flex; gap:10px; margin-top:15px;">
+        <button class="btn" style="flex:1;" onclick="guardarConfigSunat()">Guardar Credenciales</button>
+        <button class="btn btn-danger" style="flex:1;" onclick="cerrarConfigSunat()">Cancelar</button>
+      </div>
+    </div>
+  </div>
+
   <script>
     const URL_SCRIPT = "https://script.google.com/macros/s/AKfycbxXpMgPYWmvduihcH37oU80-tdP9qik7QaDChQeG2xZt6lcsk9A8xI5dH4XREJE_Oq1Yw/exec";
     
@@ -306,6 +329,7 @@
     let montoCajaInicial = 100.00;
     let html5QrCode = null;
     let ultimaVentaRegistrada = null;
+    let sunatConfig = { ruc: "20123456789", usuarioSol: "", claveSol: "", tokenApi: "" };
 
     async function cargarDatosBD(mostrarAviso = false) {
       try {
@@ -316,6 +340,9 @@
           codigosBarra = data.codigosBarra || [];
           clientes = data.clientes || [];
           cortesZ = data.cortes || [];
+          if (data.sunatConfig && data.sunatConfig.ruc) {
+            sunatConfig = data.sunatConfig;
+          }
           generarIdAutomatico();
           renderizarTodo();
           if (mostrarAviso) alert("¡Datos actualizados correctamente desde el servidor!");
@@ -419,10 +446,14 @@
       const p = document.getElementById("log-pass").value.trim();
       
       let rol = "Usuario";
-      if (u === "admin" && p === "1234") rol = "Administrador";
-      else if (u === "visor" && p === "0000") rol = "Espectador";
-      else if (u === "cajero1" && p === "4321") rol = "Usuario";
-      else {
+      if (u === "admin" && p === "1234") {
+        rol = "Administrador";
+        document.getElementById("btn-config-sunat").style.display = "block";
+      } else if (u === "visor" && p === "0000") {
+        rol = "Espectador";
+      } else if (u === "cajero1" && p === "4321") {
+        rol = "Usuario";
+      } else {
         alert("Usuario o contraseña incorrectos.");
         return;
       }
@@ -434,6 +465,32 @@
       document.getElementById("corte-inicial").value = montoCajaInicial.toFixed(2);
 
       cargarDatosBD();
+    }
+
+    function abrirConfigSunat() {
+      if (usuarioActual.rol !== "Administrador") return alert("Acceso restringido solo al Administrador.");
+      document.getElementById("sunat-ruc").value = sunatConfig.ruc || "";
+      document.getElementById("sunat-user").value = sunatConfig.usuarioSol || "";
+      document.getElementById("sunat-pass").value = sunatConfig.claveSol || "";
+      document.getElementById("sunat-token").value = sunatConfig.tokenApi || "";
+      document.getElementById("modal-sunat").style.display = "block";
+    }
+
+    function cerrarConfigSunat() {
+      document.getElementById("modal-sunat").style.display = "none";
+    }
+
+    async function guardarConfigSunat() {
+      const payload = {
+        ruc: document.getElementById("sunat-ruc").value.trim(),
+        usuarioSol: document.getElementById("sunat-user").value.trim(),
+        claveSol: document.getElementById("sunat-pass").value.trim(),
+        tokenApi: document.getElementById("sunat-token").value.trim()
+      };
+      await enviarServidor("guardarSunatConfig", payload);
+      sunatConfig = payload;
+      alert("¡Configuración SUNAT guardada correctamente!");
+      cerrarConfigSunat();
     }
 
     function verTab(sec, btn) {
@@ -522,7 +579,7 @@
       let total = 0;
       carrito.forEach((item, idx) => {
         total += item.total;
-        tbody.innerHTML += `<tr><td>${item.descripcion}<br><small style="color:#666;">Venc: ${item.fechaVencimiento || 'N/A'}</small></td><td>${item.cantidad}</td><td>S/ ${item.total.toFixed(2)}</td><td><button onclick="carrito.splice(${idx},1); renderCarrito();">X</button></td></tr>`;
+        tbody.innerHTML += `<tr><td>${item.descripcion}</td><td>${item.cantidad}</td><td>S/ ${item.total.toFixed(2)}</td><td><button onclick="carrito.splice(${idx},1); renderCarrito();">X</button></td></tr>`;
       });
       document.getElementById("lbl-total").innerText = "Total: S/ " + total.toFixed(2);
       renderTopSellers();
@@ -552,7 +609,7 @@
           fecha: new Date().toLocaleString()
         };
         alert("¡Venta registrada con éxito!");
-        if (confirm("¿Deseas imprimir el comprobante de esta venta ahora?")) {
+        if (confirm("¿Deseas imprimir el comprobante electrónico de esta venta ahora?")) {
           imprimirUltimoComprobante();
         }
       }
@@ -564,12 +621,13 @@
     function imprimirUltimoComprobante() {
       if (!ultimaVentaRegistrada) return alert("No hay ninguna venta registrada recientemente en esta sesión.");
       
-      let tipoComprobante = prompt("¿Qué desea emitir?\n1. Boleta\n2. Factura", "1");
+      let tipoComprobante = prompt("¿Qué desea emitir?\n1. Boleta Electrónica\n2. Factura Electrónica", "1");
       if (tipoComprobante !== "1" && tipoComprobante !== "2") return;
       
       let numComprobante = ultimaVentaRegistrada.idVenta;
       let serieFacturaTxt = "";
       let logoSrc = "boleta.jfif";
+      let rucEmpresa = sunatConfig.ruc || "20123456789";
       
       if (tipoComprobante === "2") {
         logoSrc = "factura.jfif";
@@ -581,7 +639,7 @@
       let htmlContenido = `
         <html>
         <head>
-          <title>Comprobante</title>
+          <title>Comprobante Electrónico</title>
           <style>
             body { font-family: 'Courier New', Courier, monospace; font-size: 12px; width: 280px; margin: 0 auto; background: white; color: black; }
             .text-center { text-align: center; }
@@ -595,9 +653,9 @@
           <div class="text-center">
             <img src="${logoSrc}" style="max-width: 100px; height: auto;" onerror="this.style.display='none'"/>
             <h3>MINIMARKET POS PRO</h3>
-            <p>RUC: 20123456789<br>Av. Principal 123 - Lima</p>
+            <p>RUC: ${rucEmpresa}<br>Av. Principal 123 - Lima<br><b>AUTORIZADO POR SUNAT</b></p>
             <hr>
-            <h4>${tipoComprobante === "2" ? "FACTURA ELECTRÓNICA" : "BOLETA DE VENTA"}</h4>
+            <h4>${tipoComprobante === "2" ? "FACTURA ELECTRÓNICA" : "BOLETA DE VENTA ELECTRÓNICA"}</h4>
             <p><b>${tipoComprobante === "2" ? serieFacturaTxt : 'N° ' + numComprobante}</b><br>Fecha: ${ultimaVentaRegistrada.fecha}<br>Cajero: ${ultimaVentaRegistrada.cajero}</p>
           </div>
           <hr>
@@ -611,7 +669,7 @@
       ultimaVentaRegistrada.items.forEach(i => {
         htmlContenido += `
           <tr>
-            <td colspan="2">${i.cantidad} x ${i.descripcion}<br><small>Venc: ${i.fechaVencimiento || 'N/A'}</small></td>
+            <td colspan="2">${i.cantidad} x ${i.descripcion}</td>
           </tr>
           <tr>
             <td>S/. ${i.precioUnitario.toFixed(2)} c/u</td>
@@ -630,7 +688,7 @@
           </table>
           <hr>
           <div class="text-center">
-            <p>¡Gracias por su compra!<br>Consulte su comprobante en nuestra web</p>
+            <p>Representación Impresa de Comprobante Electrónico<br>Consulte su documento en el portal SUNAT<br>¡Gracias por su compra!</p>
           </div>
         </body>
         </html>
@@ -775,7 +833,7 @@
     async function ejecutarCorte(tipo) {
       const ef = parseFloat(document.getElementById("corte-efectivo").value) || 0;
       await enviarServidor("ejecutarCorte", { cajero: usuarioActual.usuario, montoInicial: montoCajaInicial, efectivoDeclarado: ef, tipo: tipo });
-      alert(`¡${tipo === 'CORTE_X' ? 'Corte X de Turno' : 'Corte Z Final (y migración mensual si aplica)'} completado con éxito!`);
+      alert(`¡${tipo === 'CORTE_X' ? 'Corte X de Turno' : 'Corte Z Final y Cierre Mensual Histórico'} registrado con éxito en la hoja de Excel!`);
       setTimeout(() => cargarDatosBD(false), 1000);
     }
 
