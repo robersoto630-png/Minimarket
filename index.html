@@ -5,7 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>POS Minimarket & Bodega Pro</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-  <!-- Librería para lector de código QR y barras con cámara de celular -->
   <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
   <style>
     body { font-family: Arial, sans-serif; margin: 0; background: #f4f6f9; color: #333; }
@@ -26,6 +25,7 @@
     .btn-warning { background: #ffc107; color: black; }
     .btn-excel { background: #1D6F42; color: white; }
     .btn-camara { background: #6f42c1; color: white; margin-top: 5px; width: 100%; }
+    .btn-refresh { background: #17a2b8; color: white; padding: 4px 10px; font-size: 12px; margin-left: 10px; border-radius: 4px; border: none; cursor: pointer; }
     .search-results { position: absolute; background: white; border: 1px solid #ccc; width: calc(100% - 20px); max-height: 200px; overflow-y: auto; z-index: 10; display: none; }
     .search-item { padding: 8px; cursor: pointer; border-bottom: 1px solid #eee; }
     .search-item:hover { background: #007bff; color: white; }
@@ -38,7 +38,7 @@
 </head>
 <body>
 
-  <div class="version-badge">Versión: v3.1</div>
+  <div class="version-badge">Versión: v3.2</div>
 
   <!-- LOGIN -->
   <div id="login-view" class="login-container">
@@ -56,8 +56,9 @@
   <div id="app-view" style="display:none;">
     <div class="header">
       <h3 style="margin:0;">Minimarket POS Pro</h3>
-      <div>
+      <div style="display:flex; align-items:center;">
         <span id="user-display"></span>
+        <button class="btn-refresh" onclick="cargarDatosBD(true)">🔄 Actualizar</button>
         <button class="btn btn-danger" style="margin-left:10px; padding:4px 8px;" onclick="location.reload()">Salir</button>
       </div>
     </div>
@@ -74,7 +75,7 @@
     <div id="sec-ventas" class="panel">
       <div class="layout-grid">
         <div class="flex-2" style="position:relative;">
-          <h4>Buscador / Lector de Código de Barras</h4>
+          <h4>Buscador / Lector de Código de Barras (PC o Celular)</h4>
           <input type="text" id="txt-buscar" placeholder="Escanee con pistola o escriba producto..." oninput="filtrarProductos(this.value)" onkeypress="detectarEscaner(event)">
           <div id="search-box" class="search-results"></div>
           
@@ -278,7 +279,7 @@
     let montoCajaInicial = 100.00;
     let html5QrCode = null;
 
-    async function cargarDatosBD() {
+    async function cargarDatosBD(mostrarAviso = false) {
       try {
         const res = await fetch(URL_SCRIPT + "?action=obtenerTodo");
         const data = await res.json();
@@ -288,11 +289,13 @@
           clientes = data.clientes || [];
           cortesZ = data.cortes || [];
           generarIdAutomatico();
+          renderizarTodo();
+          if (mostrarAviso) alert("¡Datos actualizados correctamente desde el servidor!");
         }
       } catch (e) {
         console.warn("Error al cargar datos", e);
+        if (mostrarAviso) alert("No se pudo actualizar con el servidor.");
       }
-      renderizarTodo();
     }
 
     function generarIdAutomatico() {
@@ -338,7 +341,6 @@
       }
     }
 
-    // Lector con cámara de celular
     function abrirCamaraEscaner() {
       const readerDiv = document.getElementById("reader");
       readerDiv.style.display = "block";
@@ -356,7 +358,7 @@
             agregarAlCarrito(match.id);
             alert("¡Producto escaneado con éxito: " + match.descripcion + "!");
           } else {
-            alert("Código escaneado no encontrado en el inventario: " + decodedText);
+            alert("Código escaneado no encontrado: " + decodedText);
           }
         },
         (errorMessage) => {}
@@ -400,7 +402,7 @@
       usuarioActual = { usuario: u, rol: rol };
       document.getElementById("login-view").style.display = "none";
       document.getElementById("app-view").style.display = "block";
-      document.getElementById("user-display").innerText = `${u} (${rol}) | Caja Inicial: S/ ${montoCajaInicial.toFixed(2)}`;
+      document.getElementById("user-display").innerText = `${u} (${rol}) | Caja: S/ ${montoCajaInicial.toFixed(2)}`;
       document.getElementById("corte-inicial").value = montoCajaInicial.toFixed(2);
 
       cargarDatosBD();
@@ -434,7 +436,7 @@
       if (res.length > 0) {
         box.style.display = "block";
         res.forEach(cb => {
-          box.innerHTML += `<div class="search-item" onclick="agregarItemCarritoFinal('${cb.id}', '${cb.fechaVencimiento}'); document.getElementById('search-box').style.display='none'; document.getElementById('txt-buscar').value='';">${cb.descripcion} | Venc: ${cb.fechaVencimiento || 'N/A'} | Stock: ${cb.stockActual} (S/ ${cb.precioVenta})</div>`;
+          box.innerHTML += `<div class="search-item" onclick="agregarItemCarritoFinal('${cb.id}', '${cb.fechaVencimiento}'); document.getElementById('search-box').style.display='none'; document.getElementById('txt-buscar').value='';" title="Haga clic para agregar lote">${cb.descripcion} | Venc: ${cb.fechaVencimiento || 'N/A'} | Stock: ${cb.stockActual} (S/ ${cb.precioVenta})</div>`;
         });
       } else {
         box.style.display = "none";
@@ -448,7 +450,7 @@
       if (lotes.length === 1) {
         agregarItemCarritoFinal(lotes[0].id, lotes[0].fechaVencimiento);
       } else {
-        let opciones = "Existen múltiples lotes con fecha de vencimiento (dd/mm/yyyy):\n";
+        let opciones = "Existen múltiples lotes (dd/mm/yyyy):\n";
         lotes.forEach((l, idx) => opciones += `${idx + 1}. Venc: ${l.fechaVencimiento} - Stock: ${l.stockActual}\n`);
         let eleccion = prompt(opciones, "1");
         let idxSel = parseInt(eleccion) - 1;
@@ -509,10 +511,10 @@
       const payload = { items: carrito, cajero: usuarioActual.usuario, metodoPago: modo, clienteNombre: cliente };
 
       await enviarServidor("registrarVenta", payload);
-      alert("¡Venta registrada con éxito y stock actualizado!");
+      alert("¡Venta registrada con éxito!");
       carrito = [];
       renderCarrito();
-      setTimeout(cargarDatosBD, 1200);
+      setTimeout(() => cargarDatosBD(false), 1000);
     }
 
     function renderClientes() {
@@ -527,8 +529,8 @@
       const monto = prompt(`Ingrese el monto a abonar para el cliente ${nombre}:`);
       if (monto && parseFloat(monto) > 0) {
         await enviarServidor("abonarCredito", { nombre: nombre, monto: monto });
-        alert("¡Abono procesado con éxito!");
-        setTimeout(cargarDatosBD, 1200);
+        alert("¡Abono procesado!");
+        setTimeout(() => cargarDatosBD(false), 1000);
       }
     }
 
@@ -588,17 +590,16 @@
       };
       await enviarServidor("registrarCliente", payload);
       alert("¡Cliente guardado!");
-      setTimeout(cargarDatosBD, 1200);
+      setTimeout(() => cargarDatosBD(false), 1000);
     }
 
     async function guardarProducto() {
       const esExistente = document.getElementById("chk-id-existente").checked;
       
-      // Convertir formato fecha input (yyyy-mm-dd) a dd/mm/yyyy
       let fechaInput = document.getElementById("p-venc").value;
       let fechaVencFormateada = "";
       if (fechaInput) {
-        let partes = fechaInput.split("-"); // [yyyy, mm, dd]
+        let partes = fechaInput.split("-");
         if (partes.length === 3) {
           fechaVencFormateada = `${partes[2]}/${partes[1]}/${partes[0]}`;
         }
@@ -622,7 +623,7 @@
       };
       await enviarServidor("registrarProducto", payload);
       alert("¡Producto o lote registrado con éxito!");
-      setTimeout(cargarDatosBD, 1200);
+      setTimeout(() => cargarDatosBD(false), 1000);
     }
 
     async function registrarMerma() {
@@ -633,14 +634,14 @@
       
       await enviarServidor("registrarMerma", { id: pId, fechaVencimiento: pVenc, cantidad: cant });
       alert("¡Merma registrada y stock descontado!");
-      setTimeout(cargarDatosBD, 1200);
+      setTimeout(() => cargarDatosBD(false), 1000);
     }
 
     async function ejecutarCorteZ() {
       const ef = parseFloat(document.getElementById("corte-efectivo").value) || 0;
       await enviarServidor("ejecutarCorteZ", { cajero: usuarioActual.usuario, montoInicial: montoCajaInicial, efectivoDeclarado: ef });
       alert("¡Cierre Z completado exitosamente!");
-      setTimeout(cargarDatosBD, 1200);
+      setTimeout(() => cargarDatosBD(false), 1000);
     }
 
     function descargarPlantillaExcel() {
@@ -679,7 +680,7 @@
           
           await enviarServidor("registroMasivoProductos", rows);
           alert(`¡Se importaron ${rows.length} registros masivamente!`);
-          setTimeout(cargarDatosBD, 1200);
+          setTimeout(() => cargarDatosBD(false), 1000);
         } catch (err) {
           alert("Error: " + err.message);
         }
