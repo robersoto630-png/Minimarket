@@ -5,6 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>POS Minimarket & Bodega Pro</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <!-- Librería para lector de código QR y barras con cámara de celular -->
+  <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
   <style>
     body { font-family: Arial, sans-serif; margin: 0; background: #f4f6f9; color: #333; }
     .version-badge { position: fixed; bottom: 5px; right: 10px; background: #007bff; color: white; padding: 4px 10px; font-size: 11px; font-weight: bold; border-radius: 4px; z-index: 9999; }
@@ -23,6 +25,7 @@
     .btn-info { background: #17a2b8; }
     .btn-warning { background: #ffc107; color: black; }
     .btn-excel { background: #1D6F42; color: white; }
+    .btn-camara { background: #6f42c1; color: white; margin-top: 5px; width: 100%; }
     .search-results { position: absolute; background: white; border: 1px solid #ccc; width: calc(100% - 20px); max-height: 200px; overflow-y: auto; z-index: 10; display: none; }
     .search-item { padding: 8px; cursor: pointer; border-bottom: 1px solid #eee; }
     .search-item:hover { background: #007bff; color: white; }
@@ -35,7 +38,7 @@
 </head>
 <body>
 
-  <div class="version-badge">Versión: v3.0</div>
+  <div class="version-badge">Versión: v3.1</div>
 
   <!-- LOGIN -->
   <div id="login-view" class="login-container">
@@ -71,9 +74,18 @@
     <div id="sec-ventas" class="panel">
       <div class="layout-grid">
         <div class="flex-2" style="position:relative;">
-          <h4>Buscador / Lector de Código de Barras (Pistola o Celular)</h4>
-          <input type="text" id="txt-buscar" placeholder="Escanee o escriba producto..." oninput="filtrarProductos(this.value)" onkeypress="detectarEscaner(event)">
+          <h4>Buscador / Lector de Código de Barras</h4>
+          <input type="text" id="txt-buscar" placeholder="Escanee con pistola o escriba producto..." oninput="filtrarProductos(this.value)" onkeypress="detectarEscaner(event)">
           <div id="search-box" class="search-results"></div>
+          
+          <button class="btn btn-camara" onclick="abrirCamaraEscaner()">📱 Activar Cámara del Celular para Escanear</button>
+          <div id="reader" style="width:100%; max-width:400px; display:none; margin-top:10px;"></div>
+
+          <div style="background:#e9ecef; padding:8px; border-radius:4px; margin-top:10px;">
+            <label style="font-size:13px; cursor:pointer; font-weight:bold;">
+              <input type="checkbox" id="chk-precio-mayor" onchange="renderCarrito()" style="width:auto;"> Aplicar Precio por Mayor
+            </label>
+          </div>
 
           <h4>Productos Más Vendidos (Top Sellers)</h4>
           <div id="top-products" class="quick-buttons"></div>
@@ -146,23 +158,50 @@
             <label>Descripción:</label>
             <input type="text" id="p-desc" placeholder="Nombre del producto">
 
+            <label>A_Granel:</label>
+            <select id="p-agranel">
+              <option value="NO">NO</option>
+              <option value="SI">SI</option>
+            </select>
+
+            <label>Unidad_Medida:</label>
+            <select id="p-unidad">
+              <option value="unidad">unidad</option>
+              <option value="kg">kg</option>
+              <option value="litro">litro</option>
+              <option value="paquete">paquete</option>
+              <option value="caja">caja</option>
+            </select>
+
+            <label>Unidades_Empaque:</label>
+            <input type="number" id="p-empaque" value="1">
+
             <label>Costo Unidad S/:</label>
             <input type="number" id="p-costo" step="0.01" placeholder="0.00">
 
+            <label>Costo Mayor S/:</label>
+            <input type="number" id="p-costomayor" step="0.01" placeholder="0.00">
+
             <label>Precio Venta S/:</label>
             <input type="number" id="p-precio" step="0.01" placeholder="0.00">
+
+            <label>Precio Mayor S/ (Columna M):</label>
+            <input type="number" id="p-preciomayor" step="0.01" placeholder="0.00">
+
+            <label>Stock Minimo:</label>
+            <input type="number" id="p-minimo" value="5">
 
             <label>Categoría:</label>
             <input type="text" id="p-cat" value="General">
           </div>
 
-          <label>Código de Barras:</label>
+          <label>Codigo_Barras:</label>
           <input type="text" id="p-barras" placeholder="Ej. 7750123456789">
 
           <label>Stock Actual (Lote):</label>
           <input type="number" id="p-stock" value="10">
 
-          <label>Fecha de Vencimiento:</label>
+          <label>Fecha de Vencimiento (dd/mm/yyyy):</label>
           <input type="date" id="p-venc">
 
           <button class="btn" onclick="guardarProducto()">Guardar Producto / Lote</button>
@@ -180,7 +219,7 @@
             <button class="btn btn-excel" onclick="descargarExcelProductos()">Descargar Stock (.xlsx)</button>
           </div>
           <table id="tbl-productos">
-            <thead><tr><th>ID</th><th>Descripción</th><th>Precio</th><th>Stock Total</th></tr></thead>
+            <thead><tr><th>ID</th><th>Descripción</th><th>Precio Reg.</th><th>Precio Mayor</th><th>Stock Total</th></tr></thead>
             <tbody></tbody>
           </table>
         </div>
@@ -237,6 +276,7 @@
     let carrito = [];
     let usuarioActual = null;
     let montoCajaInicial = 100.00;
+    let html5QrCode = null;
 
     async function cargarDatosBD() {
       try {
@@ -286,17 +326,43 @@
       }
     }
 
-    // Detectar pistola lectora al presionar Enter o escaneo rápido
     function detectarEscaner(e) {
       if (e.key === 'Enter') {
         const val = document.getElementById("txt-buscar").value.trim();
-        let match = codigosBarra.find(cb => cb.codigoBarras.toLowerCase() === val.toLowerCase());
+        let match = codigosBarra.find(cb => cb.codigoBarras.toLowerCase() === val.toLowerCase() || cb.id.toLowerCase() === val.toLowerCase());
         if (match) {
-          agregarAlCarritoPorCodigo(match.codigoBarras);
+          agregarAlCarrito(match.id);
           document.getElementById("txt-buscar").value = "";
           document.getElementById("search-box").style.display = "none";
         }
       }
+    }
+
+    // Lector con cámara de celular
+    function abrirCamaraEscaner() {
+      const readerDiv = document.getElementById("reader");
+      readerDiv.style.display = "block";
+      if (!html5QrCode) {
+        html5QrCode = new Html5Qrcode("reader");
+      }
+      html5QrCode.start(
+        { facingMode: "environment" },
+        { fps: 10, qrbox: { width: 250, height: 150 } },
+        (decodedText) => {
+          html5QrCode.stop();
+          readerDiv.style.display = "none";
+          let match = codigosBarra.find(cb => cb.codigoBarras.toLowerCase() === decodedText.toLowerCase() || cb.id.toLowerCase() === decodedText.toLowerCase());
+          if (match) {
+            agregarAlCarrito(match.id);
+            alert("¡Producto escaneado con éxito: " + match.descripcion + "!");
+          } else {
+            alert("Código escaneado no encontrado en el inventario: " + decodedText);
+          }
+        },
+        (errorMessage) => {}
+      ).catch(err => {
+        alert("No se pudo iniciar la cámara: " + err);
+      });
     }
 
     function renderizarTodo() {
@@ -353,7 +419,8 @@
       topContainer.innerHTML = "";
       const ordenados = [...productos].sort((a,b) => (b.contador || 0) - (a.contador || 0)).slice(0, 6);
       ordenados.forEach(p => {
-        topContainer.innerHTML += `<div class="btn-quick" onclick="agregarAlCarrito('${p.id}')">${p.descripcion}<br><b>S/ ${parseFloat(p.precioVenta || 0).toFixed(2)}</b></div>`;
+        let precioMostrado = document.getElementById("chk-precio-mayor").checked ? (p.precioMayor || p.precioVenta) : p.precioVenta;
+        topContainer.innerHTML += `<div class="btn-quick" onclick="agregarAlCarrito('${p.id}')">${p.descripcion}<br><b>S/ ${parseFloat(precioMostrado).toFixed(2)}</b></div>`;
       });
     }
 
@@ -367,7 +434,7 @@
       if (res.length > 0) {
         box.style.display = "block";
         res.forEach(cb => {
-          box.innerHTML += `<div class="search-item" onclick="agregarAlCarritoPorCodigo('${cb.codigoBarras}'); document.getElementById('search-box').style.display='none'; document.getElementById('txt-buscar').value='';">${cb.descripcion} | Venc: ${cb.fechaVencimiento || 'N/A'} | Stock: ${cb.stockActual} (S/ ${cb.precioVenta})</div>`;
+          box.innerHTML += `<div class="search-item" onclick="agregarItemCarritoFinal('${cb.id}', '${cb.fechaVencimiento}'); document.getElementById('search-box').style.display='none'; document.getElementById('txt-buscar').value='';">${cb.descripcion} | Venc: ${cb.fechaVencimiento || 'N/A'} | Stock: ${cb.stockActual} (S/ ${cb.precioVenta})</div>`;
         });
       } else {
         box.style.display = "none";
@@ -375,33 +442,43 @@
     }
 
     function agregarAlCarrito(idProd) {
-      // Si tiene múltiples fechas de vencimiento, permitir elegir lote
       const lotes = codigosBarra.filter(cb => cb.id === idProd && cb.stockActual > 0);
       if (lotes.length === 0) return alert("Producto sin stock disponible.");
       
       if (lotes.length === 1) {
-        agregarItemCarritoFinal(lotes[0]);
+        agregarItemCarritoFinal(lotes[0].id, lotes[0].fechaVencimiento);
       } else {
-        let opciones = "Seleccione el lote por fecha de vencimiento:\n";
+        let opciones = "Existen múltiples lotes con fecha de vencimiento (dd/mm/yyyy):\n";
         lotes.forEach((l, idx) => opciones += `${idx + 1}. Venc: ${l.fechaVencimiento} - Stock: ${l.stockActual}\n`);
         let eleccion = prompt(opciones, "1");
         let idxSel = parseInt(eleccion) - 1;
-        if (lotes[idxSel]) agregarItemCarritoFinal(lotes[idxSel]);
+        if (lotes[idxSel]) {
+          agregarItemCarritoFinal(lotes[idxSel].id, lotes[idxSel].fechaVencimiento);
+        }
       }
     }
 
-    function agregarAlCarritoPorCodigo(codigo) {
-      const cb = codigosBarra.find(item => item.codigoBarras.toLowerCase() === codigo.toLowerCase());
-      if (cb) agregarItemCarritoFinal(cb);
-    }
+    function agregarItemCarritoFinal(idProd, fechaVenc) {
+      const prod = productos.find(p => p.id === idProd);
+      const cb = codigosBarra.find(item => item.id === idProd && item.fechaVencimiento === fechaVenc);
+      if (!prod || !cb) return;
 
-    function agregarItemCarritoFinal(cb) {
-      const item = carrito.find(i => i.id === cb.id && i.fechaVencimiento === cb.fechaVencimiento);
+      let usarMayor = document.getElementById("chk-precio-mayor").checked;
+      let precioFinal = usarMayor ? (prod.precioMayor || cb.precioVenta) : cb.precioVenta;
+
+      const item = carrito.find(i => i.id === idProd && i.fechaVencimiento === fechaVenc && i.precioUnitario === precioFinal);
       if (item) {
         item.cantidad += 1;
         item.total = item.cantidad * item.precioUnitario;
       } else {
-        carrito.push({ id: cb.id, descripcion: cb.descripcion, cantidad: 1, precioUnitario: cb.precioVenta, total: cb.precioVenta, fechaVencimiento: cb.fechaVencimiento });
+        carrito.push({ 
+          id: idProd, 
+          descripcion: prod.descripcion, 
+          cantidad: 1, 
+          precioUnitario: precioFinal, 
+          total: precioFinal, 
+          fechaVencimiento: fechaVenc 
+        });
       }
       renderCarrito();
     }
@@ -415,6 +492,7 @@
         tbody.innerHTML += `<tr><td>${item.descripcion}<br><small style="color:#666;">Venc: ${item.fechaVencimiento || 'N/A'}</small></td><td>${item.cantidad}</td><td>S/ ${item.total.toFixed(2)}</td><td><button onclick="carrito.splice(${idx},1); renderCarrito();">X</button></td></tr>`;
       });
       document.getElementById("lbl-total").innerText = "Total: S/ " + total.toFixed(2);
+      renderTopSellers();
     }
 
     function toggleClienteCredito(val) {
@@ -431,7 +509,7 @@
       const payload = { items: carrito, cajero: usuarioActual.usuario, metodoPago: modo, clienteNombre: cliente };
 
       await enviarServidor("registrarVenta", payload);
-      alert("¡Venta registrada con éxito, contadores de productos y lotes actualizados en el Excel!");
+      alert("¡Venta registrada con éxito y stock actualizado!");
       carrito = [];
       renderCarrito();
       setTimeout(cargarDatosBD, 1200);
@@ -449,7 +527,7 @@
       const monto = prompt(`Ingrese el monto a abonar para el cliente ${nombre}:`);
       if (monto && parseFloat(monto) > 0) {
         await enviarServidor("abonarCredito", { nombre: nombre, monto: monto });
-        alert("¡Abono procesado y registrado en la pestaña Creditos!");
+        alert("¡Abono procesado con éxito!");
         setTimeout(cargarDatosBD, 1200);
       }
     }
@@ -458,7 +536,7 @@
       const tbody = document.querySelector("#tbl-productos tbody");
       tbody.innerHTML = "";
       productos.forEach(p => {
-        tbody.innerHTML += `<tr><td>${p.id}</td><td>${p.descripcion}</td><td>S/ ${p.precioVenta}</td><td>${p.stockActual}</td></tr>`;
+        tbody.innerHTML += `<tr><td>${p.id}</td><td>${p.descripcion}</td><td>S/ ${p.precioVenta}</td><td>S/ ${p.precioMayor || '-'}</td><td>${p.stockActual}</td></tr>`;
       });
     }
 
@@ -509,24 +587,41 @@
         limiteCredito: document.getElementById("cli-lim").value
       };
       await enviarServidor("registrarCliente", payload);
-      alert("¡Cliente guardado en el Excel!");
+      alert("¡Cliente guardado!");
       setTimeout(cargarDatosBD, 1200);
     }
 
     async function guardarProducto() {
       const esExistente = document.getElementById("chk-id-existente").checked;
+      
+      // Convertir formato fecha input (yyyy-mm-dd) a dd/mm/yyyy
+      let fechaInput = document.getElementById("p-venc").value;
+      let fechaVencFormateada = "";
+      if (fechaInput) {
+        let partes = fechaInput.split("-"); // [yyyy, mm, dd]
+        if (partes.length === 3) {
+          fechaVencFormateada = `${partes[2]}/${partes[1]}/${partes[0]}`;
+        }
+      }
+
       const payload = {
         id: document.getElementById("p-id").value,
         codigoBarras: document.getElementById("p-barras").value,
         descripcion: esExistente ? "" : document.getElementById("p-desc").value,
+        aGranel: esExistente ? "NO" : document.getElementById("p-agranel").value,
+        unidadMedida: esExistente ? "unidad" : document.getElementById("p-unidad").value,
+        unidadesEmpaque: esExistente ? 1 : document.getElementById("p-empaque").value,
         costoUnidad: esExistente ? 0 : document.getElementById("p-costo").value,
+        costoMayor: esExistente ? 0 : document.getElementById("p-costomayor").value,
         precioVenta: esExistente ? 0 : document.getElementById("p-precio").value,
-        categoria: esExistente ? "" : document.getElementById("p-cat").value,
-        fechaVencimiento: document.getElementById("p-venc").value,
+        precioMayor: esExistente ? 0 : document.getElementById("p-preciomayor").value,
+        stockMinimo: esExistente ? 5 : document.getElementById("p-minimo").value,
+        categoria: esExistente ? "General" : document.getElementById("p-cat").value,
+        fechaVencimiento: fechaVencFormateada,
         stockActual: document.getElementById("p-stock").value
       };
       await enviarServidor("registrarProducto", payload);
-      alert("¡Producto o lote registrado en las pestañas Productos y Cod_Barra_Alias!");
+      alert("¡Producto o lote registrado con éxito!");
       setTimeout(cargarDatosBD, 1200);
     }
 
@@ -537,14 +632,14 @@
       if(!pId) return alert("Seleccione un lote de producto.");
       
       await enviarServidor("registrarMerma", { id: pId, fechaVencimiento: pVenc, cantidad: cant });
-      alert("¡Merma registrada y stock descontado del lote en el Excel!");
+      alert("¡Merma registrada y stock descontado!");
       setTimeout(cargarDatosBD, 1200);
     }
 
     async function ejecutarCorteZ() {
       const ef = parseFloat(document.getElementById("corte-efectivo").value) || 0;
       await enviarServidor("ejecutarCorteZ", { cajero: usuarioActual.usuario, montoInicial: montoCajaInicial, efectivoDeclarado: ef });
-      alert("¡Cierre Z completado y registrado en la hoja CorteCaja![cite: 2]");
+      alert("¡Cierre Z completado exitosamente!");
       setTimeout(cargarDatosBD, 1200);
     }
 
@@ -553,10 +648,17 @@
         "id": "P001",
         "codigoBarras": "775000000000",
         "descripcion": "Ejemplo Producto",
+        "aGranel": "NO",
+        "unidadMedida": "unidad",
+        "unidadesEmpaque": 1,
         "costoUnidad": 2.50,
+        "costoMayor": 2.00,
         "precioVenta": 4.00,
+        "precioMayor": 3.50,
+        "stockMinimo": 5,
         "stockActual": 50,
-        "fechaVencimiento": "2027-12-31"
+        "categoria": "General",
+        "fechaVencimiento": "31/12/2027"
       }];
       const ws = XLSX.utils.json_to_sheet(plantilla);
       const wb = XLSX.utils.book_new();
