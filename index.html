@@ -40,7 +40,7 @@
     <label>Contraseña</label>
     <input type="password" id="log-pass" placeholder="••••••••">
     <button class="btn" style="width:100%; margin-top:10px;" onclick="iniciarSesion()">Ingresar</button>
-    <p style="font-size:11px; color:#666; margin-top:10px;">Roles disponibles: <b>admin</b>, <b>cajero1</b>, <b>visor</b> (Espectador)</p>
+    <p style="font-size:11px; color:#666; margin-top:10px;">Roles: <b>admin</b> (1234), <b>cajero1</b> (4321), <b>visor</b> (0000)</p>
   </div>
 
   <!-- APLICACIÓN PRINCIPAL -->
@@ -144,15 +144,20 @@
       </div>
     </div>
 
-    <!-- F4 INVENTARIO -->
+    <!-- F4 INVENTARIO Y MERMAS (Con buscador interactivo) -->
     <div id="sec-inventario" class="panel" style="display:none;">
       <h4>Control de Mermas y Bajas de Stock</h4>
-      <div style="max-width:400px;" id="box-merma">
-        <label>Seleccionar Producto:</label>
-        <select id="sel-merma-prod"></select>
+      <div style="max-width:450px;" id="box-merma">
+        <label>Buscar Producto para Merma:</label>
+        <input type="text" id="txt-buscar-merma" placeholder="Escriba para filtrar productos..." oninput="filtrarMerma(this.value)">
+        <select id="sel-merma-prod" size="5" style="width:150px; margin-top:5px; height:120px;"></select>
+        
+        <input type="hidden" id="merma-id-seleccionado">
+        <div id="lbl-prod-elegido" style="font-weight:bold; color:#0056b3; margin:5px 0;">Seleccionado: Ninguno</div>
+
         <label>Cantidad a dar de baja:</label>
-        <input type="number" id="cant-merma" value="1">
-        <button class="btn btn-warning" onclick="registrarMerma()">Registrar Merma</button>
+        <input type="number" id="cant-merma" value="1" step="0.01">
+        <button class="btn btn-warning" onclick="registrarMerma()">Registrar Merma / Baja</button>
       </div>
     </div>
 
@@ -177,8 +182,6 @@
   </div>
 
   <script>
-    const URL_SCRIPT = "https://script.google.com/macros/s/AKfycbxXpMgPYWmvduihcH37oU80-tdP9qik7QaDChQeG2xZt6lcsk9A8xI5dH4XREJE_Oq1Yw/exec";
-    
     let productos = [];
     let clientes = [];
     let aliases = [];
@@ -186,27 +189,22 @@
     let carrito = [];
     let usuarioActual = null;
 
-    async function cargarDatosBD() {
-      try {
-        const res = await fetch(URL_SCRIPT + "?action=obtenerTodo");
-        const data = await res.json();
-        if (data && data.status === "SUCCESS") {
-          productos = data.productos || [];
-          clientes = data.clientes || [];
-          aliases = data.aliases || [];
-          cortesZ = data.cortes || [];
-        }
-      } catch (e) {
-        console.warn("Error de conexión al obtener datos", e);
-      }
-      renderTopSellers();
-      renderClientes();
-      renderProductos();
-      renderSelects();
-      renderCortes();
+    function cargarDatosBD() {
+      google.script.run.withSuccessHandler(data => {
+        productos = data.productos || [];
+        clientes = data.clientes || [];
+        aliases = data.aliases || [];
+        cortesZ = data.cortes || [];
+        
+        renderTopSellers();
+        renderClientes();
+        renderProductos();
+        renderSelects();
+        renderCortes();
+      }).obtenerTodo();
     }
 
-    async function iniciarSesion() {
+    function iniciarSesion() {
       const u = document.getElementById("log-user").value.trim();
       const p = document.getElementById("log-pass").value.trim();
       
@@ -225,7 +223,7 @@
       document.getElementById("user-display").innerText = `${u} (${rol})`;
 
       aplicarPermisosRol();
-      await cargarDatosBD();
+      cargarDatosBD();
     }
 
     function aplicarPermisosRol() {
@@ -271,7 +269,7 @@
       if (res.length > 0) {
         box.style.display = "block";
         res.forEach(p => {
-          box.innerHTML += `<div class="search-item" onclick="agregarAlCarrito('${p.id}'); document.getElementById('search-box').style.display='none';">${p.descripcion} - S/ ${parseFloat(p.precioVenta).toFixed(2)}</div>`;
+          box.innerHTML += `<div class="search-item" onclick="agregarAlCarrito('${p.id}'); document.getElementById('search-box').style.display='none'; document.getElementById('txt-buscar').value='';">${p.descripcion} - S/ ${parseFloat(p.precioVenta).toFixed(2)}</div>`;
         });
       } else {
         box.style.display = "none";
@@ -306,7 +304,7 @@
       document.getElementById("box-credito").style.display = (val === "Crédito") ? "block" : "none";
     }
 
-    async function procesarPago() {
+    function procesarPago() {
       if (usuarioActual.rol === "Espectador") return alert("Acción denegada.");
       if (carrito.length === 0) return alert("El carrito está vacío.");
       const modo = document.getElementById("pay-mode").value;
@@ -316,18 +314,12 @@
 
       const payload = { items: carrito, cajero: usuarioActual.usuario, metodoPago: modo, clienteNombre: cliente };
 
-      try {
-        await fetch(URL_SCRIPT, {
-          method: "POST",
-          body: JSON.stringify({ accion: "registrarVenta", payload: payload })
-        });
-        alert("¡Venta registrada con éxito en el Excel!");
+      google.script.run.withSuccessHandler(() => {
+        alert("¡Venta registrada con éxito y Excel actualizado!");
         carrito = [];
         renderCarrito();
-        await cargarDatosBD();
-      } catch (e) {
-        alert("Error al registrar la venta.");
-      }
+        cargarDatosBD();
+      }).registrarVenta(payload);
     }
 
     function renderClientes() {
@@ -339,19 +331,13 @@
       });
     }
 
-    async function abonarDeuda(nombre) {
+    function abonarDeuda(nombre) {
       const monto = prompt(`Ingrese el monto a abonar para el cliente ${nombre}:`);
       if (monto && parseFloat(monto) > 0) {
-        try {
-          await fetch(URL_SCRIPT, {
-            method: "POST",
-            body: JSON.stringify({ accion: "abonarCredito", payload: { nombre: nombre, monto: monto } })
-          });
-          alert("¡Abono registrado correctamente y deuda actualizada en el Excel!");
-          await cargarDatosBD();
-        } catch (e) {
-          alert("Error al procesar el abono.");
-        }
+        google.script.run.withSuccessHandler(() => {
+          alert("¡Abono registrado, deuda actualizada y Excel sincronizado!");
+          cargarDatosBD();
+        }).abonarCredito({ nombre: nombre, monto: monto });
       }
     }
 
@@ -365,11 +351,30 @@
 
     function renderSelects() {
       const selCred = document.getElementById("sel-cliente-credito");
-      const selMer = document.getElementById("sel-merma-prod");
       selCred.innerHTML = "<option value=''>-- Seleccionar --</option>";
-      selMer.innerHTML = "";
       clientes.forEach(c => selCred.innerHTML += `<option value="${c.nombre}">${c.nombre} (Deuda: S/ ${c.deudaActual})</option>`);
-      productos.forEach(p => selMer.innerHTML += `<option value="${p.id}">${p.descripcion} (Stock: ${p.stockActual})</option>`);
+      
+      llenarSelectMerma(productos);
+    }
+
+    function llenarSelectMerma(lista) {
+      const selMer = document.getElementById("sel-merma-prod");
+      selMer.innerHTML = "";
+      lista.forEach(p => {
+        selMer.innerHTML += `<option value="${p.id}" onclick="seleccionarMerma('${p.id}', '${p.descripcion}')">${p.descripcion} (Stock: ${p.stockActual})</option>`;
+      });
+      selMer.onchange = function() {
+        const selectedOpt = selMer.options[selMer.selectedIndex];
+        if(selectedOpt) {
+          document.getElementById("merma-id-seleccionado").value = selMer.value;
+          document.getElementById("lbl-prod-elegido").innerText = "Seleccionado: " + selectedOpt.text;
+        }
+      };
+    }
+
+    function filtrarMerma(txt) {
+      const filtrados = productos.filter(p => p.descripcion.toLowerCase().includes(txt.toLowerCase()) || String(p.id).includes(txt));
+      llenarSelectMerma(filtrados);
     }
 
     function renderCortes() {
@@ -384,19 +389,20 @@
       });
     }
 
-    async function guardarCliente() {
+    function guardarCliente() {
       const payload = {
         nombre: document.getElementById("cli-nom").value,
         dniRuc: document.getElementById("cli-dni").value,
         telefono: document.getElementById("cli-tel").value,
         limiteCredito: document.getElementById("cli-lim").value
       };
-      await fetch(URL_SCRIPT, { method: "POST", body: JSON.stringify({ accion: "registrarCliente", payload: payload }) });
-      alert("Cliente guardado.");
-      await cargarDatosBD();
+      google.script.run.withSuccessHandler(() => {
+        alert("Cliente guardado en el Excel.");
+        cargarDatosBD();
+      }).registrarCliente(payload);
     }
 
-    async function guardarProducto() {
+    function guardarProducto() {
       const payload = {
         id: document.getElementById("p-id").value,
         codigoBarras: document.getElementById("p-barras").value,
@@ -407,24 +413,29 @@
         fechaVencimiento: document.getElementById("p-venc").value,
         aGranel: "NO", unidadMedida: "unidad", unidadesEmpaque: 1, costoMayor: 0, stockMinimo: 5, categoria: "General"
       };
-      await fetch(URL_SCRIPT, { method: "POST", body: JSON.stringify({ accion: "registrarProducto", payload: payload }) });
-      alert("Producto registrado.");
-      await cargarDatosBD();
+      google.script.run.withSuccessHandler(() => {
+        alert("Producto registrado en el Excel.");
+        cargarDatosBD();
+      }).registrarProducto(payload);
     }
 
-    async function registrarMerma() {
-      const pId = document.getElementById("sel-merma-prod").value;
+    function registrarMerma() {
+      const pId = document.getElementById("merma-id-seleccionado").value;
       const cant = document.getElementById("cant-merma").value;
-      await fetch(URL_SCRIPT, { method: "POST", body: JSON.stringify({ accion: "registrarMerma", payload: { id: pId, cantidad: cant } }) });
-      alert("Merma registrada.");
-      await cargarDatosBD();
+      if(!pId) return alert("Seleccione un producto para la merma.");
+      
+      google.script.run.withSuccessHandler(() => {
+        alert("Merma registrada y stock actualizado.");
+        cargarDatosBD();
+      }).registrarMerma({ id: pId, cantidad: cant });
     }
 
-    async function ejecutarCorteZ() {
+    function ejecutarCorteZ() {
       const ef = parseFloat(document.getElementById("corte-efectivo").value) || 0;
-      await fetch(URL_SCRIPT, { method: "POST", body: JSON.stringify({ accion: "ejecutarCorteZ", payload: { cajero: usuarioActual.usuario, efectivoDeclarado: ef } }) });
-      alert("Cierre Z completado exitosamente.");
-      await cargarDatosBD();
+      google.script.run.withSuccessHandler(() => {
+        alert("Cierre Z completado exitosamente y registrado en el Excel[cite: 2].");
+        cargarDatosBD();
+      }).ejecutarCorteZ({ cajero: usuarioActual.usuario, efectivoDeclarado: ef });
     }
   </script>
 </body>
