@@ -41,7 +41,7 @@
 </head>
 <body>
 
-  <div class="version-badge">Versión: v3.12</div>
+  <div class="version-badge">Versión: v3.13</div>
 
   <!-- LOGIN -->
   <div id="login-view" class="login-container">
@@ -521,7 +521,7 @@
       if (res.length > 0) {
         box.style.display = "block";
         res.forEach(cb => {
-          let vencTxt = cb.fechaVencimiento ? ` | Venc: ${cb.fechaVencimiento}` : "";
+          let vencTxt = cb.fechaVencimiento ? ` | Venc: ${cb.fechaVencimiento}` : " | Venc: S/F";
           box.innerHTML += `<div class="search-item" onclick="agregarItemCarritoFinal('${cb.id}', '${cb.fechaVencimiento}'); document.getElementById('search-box').style.display='none'; document.getElementById('txt-buscar').value='';" title="Haga clic para agregar lote">${cb.descripcion}${vencTxt} | Stock: ${cb.stockActual} (S/ ${cb.precioVenta})</div>`;
         });
       } else {
@@ -536,10 +536,10 @@
       if (lotes.length === 1) {
         agregarItemCarritoFinal(lotes[0].id, lotes[0].fechaVencimiento);
       } else {
-        let opciones = "Seleccione el lote:\n";
+        let opciones = "Seleccione el lote por Fecha de Vencimiento:\n";
         lotes.forEach((l, idx) => {
-          let vencTxt = l.fechaVencimiento ? ` [Venc: ${l.fechaVencimiento}]` : "";
-          opciones += `${idx + 1}. Stock: ${l.stockActual}${vencTxt}\n`;
+          let vencTxt = l.fechaVencimiento ? `[Venc: ${l.fechaVencimiento}]` : "[Sin Vencimiento]";
+          opciones += `${idx + 1}. Stock: ${l.stockActual} ${vencTxt}\n`;
         });
         let eleccion = prompt(opciones, "1");
         if (eleccion === null) return;
@@ -554,7 +554,7 @@
 
     function agregarItemCarritoFinal(idProd, fechaVenc) {
       const prod = productos.find(p => p.id === idProd);
-      const cb = codigosBarra.find(item => item.id === idProd && item.fechaVencimiento === fechaVenc);
+      const cb = codigosBarra.find(item => item.id === idProd && (item.fechaVencimiento || "") === (fechaVenc || ""));
       if (!prod || !cb) return;
 
       let usarMayor = document.getElementById("chk-precio-mayor").checked;
@@ -583,7 +583,8 @@
       let total = 0;
       carrito.forEach((item, idx) => {
         total += item.total;
-        tbody.innerHTML += `<tr><td>${item.descripcion}</td><td>${item.cantidad}</td><td>S/ ${item.total.toFixed(2)}</td><td><button onclick="carrito.splice(${idx},1); renderCarrito();">X</button></td></tr>`;
+        let vencSub = item.fechaVencimiento ? `<br><small style="color:#666;">Venc: ${item.fechaVencimiento}</small>` : "";
+        tbody.innerHTML += `<tr><td>${item.descripcion}${vencSub}</td><td>${item.cantidad}</td><td>S/ ${item.total.toFixed(2)}</td><td><button onclick="carrito.splice(${idx},1); renderCarrito();">X</button></td></tr>`;
       });
       document.getElementById("lbl-total").innerText = "Total: S/ " + total.toFixed(2);
       renderTopSellers();
@@ -673,7 +674,7 @@
       ultimaVentaRegistrada.items.forEach(i => {
         htmlContenido += `
           <tr>
-            <td colspan="2">${i.cantidad} x ${i.descripcion}</td>
+            <td colspan="2">${i.cantidad} x ${i.descripcion} ${i.fechaVencimiento ? '(Venc: ' + i.fechaVencimiento + ')' : ''}</td>
           </tr>
           <tr>
             <td>S/. ${i.precioUnitario.toFixed(2)} c/u</td>
@@ -750,14 +751,14 @@
       const selMer = document.getElementById("sel-merma-prod");
       selMer.innerHTML = "";
       lista.forEach(cb => {
-        let vencTxt = cb.fechaVencimiento ? ` [Venc: ${cb.fechaVencimiento}]` : "";
-        selMer.innerHTML += `<option value="${cb.id}|${cb.fechaVencimiento}">${cb.descripcion}${vencTxt} - Stock: ${cb.stockActual}</option>`;
+        let vencTxt = cb.fechaVencimiento ? ` [Venc: ${cb.fechaVencimiento}]` : " [Sin Vencimiento]";
+        selMer.innerHTML += `<option value="${cb.id}|${cb.fechaVencimiento || ''}">${cb.descripcion}${vencTxt} - Stock: ${cb.stockActual}</option>`;
       });
       selMer.onchange = function() {
         const val = selMer.value.split('|');
         document.getElementById("merma-id-seleccionado").value = val[0];
         document.getElementById("merma-venc-seleccionado").value = val[1];
-        document.getElementById("lbl-prod-elegido").innerText = "Seleccionado ID: " + val[0] + (val[1] ? " | Venc: " + val[1] : "");
+        document.getElementById("lbl-prod-elegido").innerText = "Seleccionado ID: " + val[0] + (val[1] ? " | Venc: " + val[1] : " | Sin Venc.");
       };
     }
 
@@ -821,7 +822,7 @@
       if(!pId) return alert("Seleccione un lote de producto.");
       
       await enviarServidor("registrarMerma", { id: pId, fechaVencimiento: pVenc, cantidad: cant });
-      alert("¡Merma registrada y stock descontado!");
+      alert("¡Mermerma registrada y stock descontado!");
       setTimeout(() => cargarDatosBD(false), 1000);
     }
 
