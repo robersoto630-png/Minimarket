@@ -41,7 +41,7 @@
 </head>
 <body>
 
-  <div class="version-badge">Versión: v3.9</div>
+  <div class="version-badge">Versión: v3.11</div>
 
   <!-- LOGIN -->
   <div id="login-view" class="login-container">
@@ -216,7 +216,7 @@
           <label>Stock Actual (Lote):</label>
           <input type="number" id="p-stock" value="10">
 
-          <label>Fecha de Vencimiento (yyyy-mm-dd):</label>
+          <label>Fecha de Vencimiento (yyyy-mm-dd) [Opcional]:</label>
           <input type="date" id="p-venc">
 
           <button class="btn" onclick="guardarProducto()">Guardar Producto / Lote</button>
@@ -521,8 +521,8 @@
       if (res.length > 0) {
         box.style.display = "block";
         res.forEach(cb => {
-          let vencTxt = cb.fechaVencimiento ? cb.fechaVencimiento : "Sin Vencimiento";
-          box.innerHTML += `<div class="search-item" onclick="agregarItemCarritoFinal('${cb.id}', '${cb.fechaVencimiento}'); document.getElementById('search-box').style.display='none'; document.getElementById('txt-buscar').value='';" title="Haga clic para agregar lote">${cb.descripcion} | Venc: ${vencTxt} | Stock: ${cb.stockActual} (S/ ${cb.precioVenta})</div>`;
+          let vencTxt = cb.fechaVencimiento ? ` | Venc: ${cb.fechaVencimiento}` : "";
+          box.innerHTML += `<div class="search-item" onclick="agregarItemCarritoFinal('${cb.id}', '${cb.fechaVencimiento}'); document.getElementById('search-box').style.display='none'; document.getElementById('txt-buscar').value='';" title="Haga clic para agregar lote">${cb.descripcion}${vencTxt} | Stock: ${cb.stockActual} (S/ ${cb.precioVenta})</div>`;
         });
       } else {
         box.style.display = "none";
@@ -536,10 +536,10 @@
       if (lotes.length === 1) {
         agregarItemCarritoFinal(lotes[0].id, lotes[0].fechaVencimiento);
       } else {
-        let opciones = "Seleccione el lote (yyyy-mm-dd):\n";
+        let opciones = "Seleccione el lote:\n";
         lotes.forEach((l, idx) => {
-          let vencTxt = l.fechaVencimiento ? l.fechaVencimiento : 'Sin Vencimiento';
-          opciones += `${idx + 1}. Venc: ${vencTxt} - Stock: ${l.stockActual}\n`;
+          let vencTxt = l.fechaVencimiento ? ` [Venc: ${l.fechaVencimiento}]` : "";
+          opciones += `${idx + 1}. Stock: ${l.stockActual}${vencTxt}\n`;
         });
         let eleccion = prompt(opciones, "1");
         if (eleccion === null) return;
@@ -750,14 +750,14 @@
       const selMer = document.getElementById("sel-merma-prod");
       selMer.innerHTML = "";
       lista.forEach(cb => {
-        let vencTxt = cb.fechaVencimiento ? cb.fechaVencimiento : "Sin Vencimiento";
-        selMer.innerHTML += `<option value="${cb.id}|${vencTxt}">${cb.descripcion} (Venc: ${vencTxt} - Stock: ${cb.stockActual})</option>`;
+        let vencTxt = cb.fechaVencimiento ? ` [Venc: ${cb.fechaVencimiento}]` : "";
+        selMer.innerHTML += `<option value="${cb.id}|${cb.fechaVencimiento}">${cb.descripcion}${vencTxt} - Stock: ${cb.stockActual}</option>`;
       });
       selMer.onchange = function() {
         const val = selMer.value.split('|');
         document.getElementById("merma-id-seleccionado").value = val[0];
         document.getElementById("merma-venc-seleccionado").value = val[1];
-        document.getElementById("lbl-prod-elegido").innerText = "Seleccionado ID: " + val[0] + " | Venc: " + val[1];
+        document.getElementById("lbl-prod-elegido").innerText = "Seleccionado ID: " + val[0] + (val[1] ? " | Venc: " + val[1] : "");
       };
     }
 
@@ -806,7 +806,7 @@
         precioMayor: esExistente ? 0 : document.getElementById("p-preciomayor").value,
         stockMinimo: esExistente ? 5 : document.getElementById("p-minimo").value,
         categoria: esExistente ? "General" : document.getElementById("p-cat").value,
-        fechaVencimiento: document.getElementById("p-venc").value, // Manda directo en formato YYYY-MM-DD
+        fechaVencimiento: document.getElementById("p-venc").value, 
         stockActual: document.getElementById("p-stock").value
       };
       await enviarServidor("registrarProducto", payload);
@@ -883,7 +883,7 @@
         "Codigo_Barras": cb.codigoBarras,
         "Descripcion": cb.descripcion,
         "Precio_Venta": cb.precioVenta,
-        "Fecha_Vencimiento": cb.fechaVencimiento || 'Sin Vencimiento',
+        "Fecha_Vencimiento": cb.fechaVencimiento || "",
         "Stock_Actual": cb.stockActual
       }));
       const ws = XLSX.utils.json_to_sheet(datosLimpios);
